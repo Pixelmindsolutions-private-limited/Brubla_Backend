@@ -151,7 +151,10 @@ import {
   updateStylistBookingAdmin,
   deleteStylistBookingAdmin,
   getPendingDesigners,
-  getPendingDesignerProducts
+  getPendingDesignerProducts,
+  generateAndSaveQR,
+  getAdminQRCode,
+  downloadQRCode
 } from '../Controller/adminController.js';
 
 const router = express.Router();
@@ -159,6 +162,12 @@ const router = express.Router();
 // ==================== ADMIN AUTH ====================
 router.post('/login', adminLogin);
 router.put('/permanent-admin', updatePermanentAdmin);
+
+router.post('/generate-qr', generateAndSaveQR);
+router.get('/qr-image/:id', getAdminQRCode);
+router.get('/admin-qr', getAdminQRCode);
+router.get('/qr-download/:id', downloadQRCode); 
+
 
 // ==================== USER MANAGEMENT ====================
 router.get('/users', getAllUsers);

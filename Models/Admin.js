@@ -10,6 +10,9 @@ const adminSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  QRimage: {
+    type: String,
+  },
 }, {
   timestamps: true,
 });

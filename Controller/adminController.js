@@ -6591,3 +6591,181 @@ export const deleteStylistBookingAdmin = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// controllers/qrController.js
+import QRCode from 'qrcode';
+import crypto from 'crypto';
+/// Helper function to get base URL
+const getBaseUrl = (req) => {
+  if (process.env.BASE_URL) {
+    return process.env.BASE_URL;
+  }
+  return `${req.protocol}://${req.get('host')}`;
+};
+
+export const generateAndSaveQR = async (req, res) => {
+  try {
+    const { url } = req.body;
+
+    // Validate URL
+    if (!url) {
+      return res.status(400).json({
+        success: false,
+        message: 'URL is required'
+      });
+    }
+
+    try {
+      new URL(url);
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid URL (e.g., https://example.com)'
+      });
+    }
+
+    // Get or create admin
+    let admin = await Admin.findOne();
+    
+    if (!admin) {
+      // Create default admin if doesn't exist
+      admin = await Admin.create({
+        email: 'admin@example.com',
+        password: 'Admin@123'
+      });
+    }
+
+    // Generate QR code as base64
+    const qrCodeDataURL = await QRCode.toDataURL(url, {
+      errorCorrectionLevel: 'H',
+      margin: 2,
+      width: 400,
+      color: {
+        dark: '#000000',
+        light: '#FFFFFF'
+      }
+    });
+
+    // Save QR code to admin
+    admin.QRimage = qrCodeDataURL;
+    await admin.save();
+
+    // ✅ FIXED: Match the route exactly - /api/admin/qr-image/:id
+    const baseUrl = getBaseUrl(req);
+    const imageUrl = `${baseUrl}/api/admin/qr-image/${admin._id}`;
+
+    return res.status(200).json({
+      success: true,
+      message: 'QR Code generated and saved successfully',
+      data: {
+        adminId: admin._id,
+        url: url,
+        qrCode: qrCodeDataURL,
+        imageUrl: imageUrl
+      }
+    });
+
+  } catch (error) {
+    console.error('QR generation error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to generate QR Code',
+      error: error.message
+    });
+  }
+};
+
+// Get QR Code from Admin by ID
+export const getAdminQRCode = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // If ID is provided, get that specific admin
+    let admin;
+    if (id) {
+      admin = await Admin.findById(id);
+    } else {
+      // Fallback to first admin if no ID provided
+      admin = await Admin.findOne();
+    }
+
+    if (!admin) {
+      return res.status(404).json({
+        success: false,
+        message: 'Admin not found'
+      });
+    }
+
+    if (!admin.QRimage) {
+      return res.status(404).json({
+        success: false,
+        message: 'QR Code not found. Please generate one first.'
+      });
+    }
+
+    // Return QR code image
+    const base64Data = admin.QRimage.replace(/^data:image\/png;base64,/, '');
+    const imageBuffer = Buffer.from(base64Data, 'base64');
+
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.send(imageBuffer);
+
+  } catch (error) {
+    console.error('Error fetching QR:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch QR Code',
+      error: error.message
+    });
+  }
+};
+
+// ✅ NEW: Download QR Code as PNG file
+export const downloadQRCode = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    let admin;
+    if (id) {
+      admin = await Admin.findById(id);
+    } else {
+      admin = await Admin.findOne();
+    }
+
+    if (!admin) {
+      return res.status(404).json({
+        success: false,
+        message: 'Admin not found'
+      });
+    }
+
+    if (!admin.QRimage) {
+      return res.status(404).json({
+        success: false,
+        message: 'QR Code not found. Please generate one first.'
+      });
+    }
+
+    // Return QR code as downloadable file
+    const base64Data = admin.QRimage.replace(/^data:image\/png;base64,/, '');
+    const imageBuffer = Buffer.from(base64Data, 'base64');
+
+    // Generate filename with timestamp
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `qr-code-${timestamp}.png`;
+
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', imageBuffer.length);
+    res.send(imageBuffer);
+
+  } catch (error) {
+    console.error('Error downloading QR:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to download QR Code',
+      error: error.message
+    });
+  }
+};
