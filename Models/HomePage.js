@@ -20,6 +20,10 @@ const heroSectionSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  redirectionLink: {
+    type: String,
+    default: null
+  },
   isActive: {
     type: Boolean,
     default: true
@@ -53,6 +57,10 @@ const bannerSectionSchema = new mongoose.Schema({
   order: {
     type: Number,
     default: 0
+  },
+  redirectionLink: {
+    type: String,
+    default: null
   },
   isActive: {
     type: Boolean,

@@ -880,7 +880,6 @@ export const createProduct = async (req, res) => {
       categoryId,
       subcategoryId,
       variants,
-      deliveryAddresses,
       tags
     } = req.body;
 
@@ -983,11 +982,7 @@ export const createProduct = async (req, res) => {
     );
 
     let addressesArray = [];
-    if (deliveryAddresses) {
-      try {
-        addressesArray = typeof deliveryAddresses === 'string' ? JSON.parse(deliveryAddresses) : deliveryAddresses;
-      } catch (e) {}
-    }
+    
 
     let tagsArray = [];
     if (tags) {
@@ -1017,7 +1012,6 @@ export const createProduct = async (req, res) => {
       subcategoryId,
       subcategoryName: subcategory.name,
       variants: processedVariants,
-      deliveryAddresses: addressesArray,
       sizeGuide: videoUrls,
       tags: tagsArray,
       createdBy: userRole,
@@ -1042,77 +1036,9 @@ export const createProduct = async (req, res) => {
     });
   }
 };
-// Get All Products
-// export const getAllProducts = async (req, res) => {
-//   try {
-//     const {
-//       categoryId,
-//       subcategoryId,
-//       isActive,
-//       minPrice,
-//       maxPrice,
-//       sortBy,
-//       page = 1,
-//       limit = 20
-//     } = req.query;
 
-//     let query = {};
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-//     // Apply filters
-//     if (categoryId) query.categoryId = categoryId;
-//     if (subcategoryId) query.subcategoryId = subcategoryId;
-//     if (isActive !== undefined) query.isActive = isActive === 'true';
-    
-//     // Price filter
-//     if (minPrice || maxPrice) {
-//       query.displayPrice = {};
-//       if (minPrice) query.displayPrice.$gte = parseFloat(minPrice);
-//       if (maxPrice) query.displayPrice.$lte = parseFloat(maxPrice);
-//     }
-
-//     // Pagination
-//     const skip = (parseInt(page) - 1) * parseInt(limit);
-    
-//     // Sorting
-//     let sort = {};
-//     if (sortBy === 'price_asc') sort.displayPrice = 1;
-//     else if (sortBy === 'price_desc') sort.displayPrice = -1;
-//     else if (sortBy === 'rating_desc') sort.averageRating = -1;
-//     else if (sortBy === 'newest') sort.createdAt = -1;
-//     else sort.createdAt = -1;
-
-//     // Approval filter for public users
-//     if (!req.user || req.user.role !== 'admin') {
-//       query.approvalStatus = { $in: ['approved', 'not_required'] };
-//       query.isActive = true;
-//     }
-
-//     const products = await Product.find(query)
-//       .populate('categoryId', 'name')
-//       .sort(sort)
-//       .skip(skip)
-//       .limit(parseInt(limit));
-
-//     const total = await Product.countDocuments(query);
-
-//     return res.status(200).json({
-//       success: true,
-//       count: products.length,
-//       total,
-//       page: parseInt(page),
-//       pages: Math.ceil(total / parseInt(limit)),
-//       products
-//     });
-
-//   } catch (error) {
-//     console.error('getAllProducts error:', error);
-//     return res.status(500).json({
-//       success: false,
-//       message: 'Internal server error'
-//     });
-//   }
-// };
-// Get All Products with Filters (Size, Color, Price, Category, Subcategory, etc.)
 export const getAllProducts = async (req, res) => {
   try {
     const {
@@ -1131,19 +1057,11 @@ export const getAllProducts = async (req, res) => {
       tags
     } = req.query;
 
+    // ============== MAIN QUERY (includes all narrowing filters) ==============
     let query = {};
 
-    // ✅ Apply category filter (works as query param)
-    if (categoryId) {
-      query.categoryId = categoryId;
-    }
-
-    // ✅ Apply subcategory filter (works as query param)
-    if (subcategoryId) {
-      query.subcategoryId = subcategoryId;
-    }
-
-    // Apply basic filters
+    if (categoryId) query.categoryId = categoryId;
+    if (subcategoryId) query.subcategoryId = subcategoryId;
     if (isActive !== undefined) query.isActive = isActive === 'true';
 
     // Price filter
@@ -1153,16 +1071,24 @@ export const getAllProducts = async (req, res) => {
       if (maxPrice) query.displayPrice.$lte = parseFloat(maxPrice);
     }
 
-    // Color filter (search in variants array)
+    // ✅ Color filter — case-insensitive exact match, supports comma-separated list
     if (colors) {
-      const colorArray = colors.split(',');
-      query['variants.color'] = { $in: colorArray };
+      const colorArray = colors.split(',').map(c => c.trim()).filter(Boolean);
+      if (colorArray.length > 0) {
+        query['variants.color'] = {
+          $in: colorArray.map(c => new RegExp(`^${escapeRegex(c)}$`, 'i'))
+        };
+      }
     }
 
-    // Size filter (search in variants.sizes array)
+    // ✅ Size filter — case-insensitive exact match, supports comma-separated list
     if (sizes) {
-      const sizeArray = sizes.split(',');
-      query['variants.sizes.size'] = { $in: sizeArray };
+      const sizeArray = sizes.split(',').map(s => s.trim()).filter(Boolean);
+      if (sizeArray.length > 0) {
+        query['variants.sizes.size'] = {
+          $in: sizeArray.map(s => new RegExp(`^${escapeRegex(s)}$`, 'i'))
+        };
+      }
     }
 
     // Rating filter
@@ -1172,28 +1098,29 @@ export const getAllProducts = async (req, res) => {
 
     // Tags filter
     if (tags) {
-      const tagsArray = tags.split(',');
-      query.tags = { $in: tagsArray };
+      const tagsArray = tags.split(',').map(t => t.trim()).filter(Boolean);
+      if (tagsArray.length > 0) {
+        query.tags = { $in: tagsArray };
+      }
     }
 
-    // Search filter (text search on name and description)
+    // Search filter
     if (search) {
       query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } }
+        { name: { $regex: escapeRegex(search), $options: 'i' } },
+        { description: { $regex: escapeRegex(search), $options: 'i' } }
       ];
     }
 
-    // Approval filter for public users
+    // Public-user approval scope
     if (!req.user || req.user.role !== 'admin') {
       query.approvalStatus = { $in: ['approved', 'not_required'] };
       query.isActive = true;
     }
 
-    // Pagination
+    // ============== PAGINATION + SORT ==============
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    // Sorting
     let sort = {};
     if (sortBy === 'price_asc') sort.displayPrice = 1;
     else if (sortBy === 'price_desc') sort.displayPrice = -1;
@@ -1210,44 +1137,82 @@ export const getAllProducts = async (req, res) => {
 
     const total = await Product.countDocuments(query);
 
-    // Get unique colors and sizes from filtered products for filter UI
+    // ============== FILTER OPTIONS (ignore narrowing filters) ==============
+    // Build a "base" query WITHOUT colors/sizes/price/rating/tags
+    // so filter chips don't disappear when applied.
+    const baseQuery = {};
+    if (categoryId) baseQuery.categoryId = categoryId;
+    if (subcategoryId) baseQuery.subcategoryId = subcategoryId;
+    if (isActive !== undefined) baseQuery.isActive = isActive === 'true';
+    if (search) {
+      baseQuery.$or = [
+        { name: { $regex: escapeRegex(search), $options: 'i' } },
+        { description: { $regex: escapeRegex(search), $options: 'i' } }
+      ];
+    }
+    if (!req.user || req.user.role !== 'admin') {
+      baseQuery.approvalStatus = { $in: ['approved', 'not_required'] };
+      baseQuery.isActive = true;
+    }
+
     let allColors = [];
     let allSizes = [];
     let priceRange = { min: 0, max: 0 };
 
-    if (products.length > 0) {
-      // Get price range from filtered products
-      const priceStats = await Product.aggregate([
-        { $match: query },
-        {
-          $group: {
-            _id: null,
-            minPrice: { $min: '$displayPrice' },
-            maxPrice: { $max: '$displayPrice' }
-          }
+    // Price range
+    const priceStats = await Product.aggregate([
+      { $match: baseQuery },
+      {
+        $group: {
+          _id: null,
+          minPrice: { $min: '$displayPrice' },
+          maxPrice: { $max: '$displayPrice' }
         }
-      ]);
-      if (priceStats.length > 0) {
-        priceRange = { min: priceStats[0].minPrice, max: priceStats[0].maxPrice };
       }
-
-      // Get unique colors from filtered products
-      const colorResults = await Product.aggregate([
-        { $match: query },
-        { $unwind: '$variants' },
-        { $group: { _id: '$variants.color' } }
-      ]);
-      allColors = colorResults.map(c => c._id).filter(c => c);
-
-      // Get unique sizes from filtered products
-      const sizeResults = await Product.aggregate([
-        { $match: query },
-        { $unwind: '$variants' },
-        { $unwind: '$variants.sizes' },
-        { $group: { _id: '$variants.sizes.size' } }
-      ]);
-      allSizes = sizeResults.map(s => s._id).filter(s => s);
+    ]);
+    if (priceStats.length > 0) {
+      priceRange = { min: priceStats[0].minPrice, max: priceStats[0].maxPrice };
     }
+
+    // ✅ Unique colors — case-insensitive dedup, alphabetical
+    const colorResults = await Product.aggregate([
+      { $match: baseQuery },
+      { $unwind: '$variants' },
+      {
+        $group: {
+          _id: { $toLower: '$variants.color' },
+          original: { $first: '$variants.color' }
+        }
+      },
+      { $sort: { original: 1 } }
+    ]);
+    allColors = colorResults.map(c => c.original).filter(Boolean);
+
+    // ✅ Unique sizes — case-insensitive dedup, logical size order
+    const sizeResults = await Product.aggregate([
+      { $match: baseQuery },
+      { $unwind: '$variants' },
+      { $unwind: '$variants.sizes' },
+      {
+        $group: {
+          _id: { $toLower: '$variants.sizes.size' },
+          original: { $first: '$variants.sizes.size' }
+        }
+      }
+    ]);
+
+    const SIZE_ORDER = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', 'Custom'];
+    allSizes = sizeResults
+      .map(s => s.original)
+      .filter(Boolean)
+      .sort((a, b) => {
+        const ai = SIZE_ORDER.findIndex(s => s.toLowerCase() === a.toLowerCase());
+        const bi = SIZE_ORDER.findIndex(s => s.toLowerCase() === b.toLowerCase());
+        if (ai === -1 && bi === -1) return a.localeCompare(b);
+        if (ai === -1) return 1;
+        if (bi === -1) return -1;
+        return ai - bi;
+      });
 
     return res.status(200).json({
       success: true,
@@ -1272,7 +1237,168 @@ export const getAllProducts = async (req, res) => {
   }
 };
 
+// export const getAllProducts = async (req, res) => {
+//   try {
+//     const {
+//       categoryId,
+//       subcategoryId,
+//       isActive,
+//       minPrice,
+//       maxPrice,
+//       sortBy,
+//       page = 1,
+//       limit = 20,
+//       colors,
+//       sizes,
+//       search,
+//       rating,
+//       tags
+//     } = req.query;
+
+//     let query = {};
+
+//     // ✅ Apply category filter (works as query param)
+//     if (categoryId) {
+//       query.categoryId = categoryId;
+//     }
+
+//     // ✅ Apply subcategory filter (works as query param)
+//     if (subcategoryId) {
+//       query.subcategoryId = subcategoryId;
+//     }
+
+//     // Apply basic filters
+//     if (isActive !== undefined) query.isActive = isActive === 'true';
+
+//     // Price filter
+//     if (minPrice || maxPrice) {
+//       query.displayPrice = {};
+//       if (minPrice) query.displayPrice.$gte = parseFloat(minPrice);
+//       if (maxPrice) query.displayPrice.$lte = parseFloat(maxPrice);
+//     }
+
+//     // Color filter (search in variants array)
+//     if (colors) {
+//       const colorArray = colors.split(',');
+//       query['variants.color'] = { $in: colorArray };
+//     }
+
+//     // Size filter (search in variants.sizes array)
+//     if (sizes) {
+//       const sizeArray = sizes.split(',');
+//       query['variants.sizes.size'] = { $in: sizeArray };
+//     }
+
+//     // Rating filter
+//     if (rating) {
+//       query.averageRating = { $gte: parseFloat(rating) };
+//     }
+
+//     // Tags filter
+//     if (tags) {
+//       const tagsArray = tags.split(',');
+//       query.tags = { $in: tagsArray };
+//     }
+
+//     // Search filter (text search on name and description)
+//     if (search) {
+//       query.$or = [
+//         { name: { $regex: search, $options: 'i' } },
+//         { description: { $regex: search, $options: 'i' } }
+//       ];
+//     }
+
+//     // Approval filter for public users
+//     if (!req.user || req.user.role !== 'admin') {
+//       query.approvalStatus = { $in: ['approved', 'not_required'] };
+//       query.isActive = true;
+//     }
+
+//     // Pagination
+//     const skip = (parseInt(page) - 1) * parseInt(limit);
+
+//     // Sorting
+//     let sort = {};
+//     if (sortBy === 'price_asc') sort.displayPrice = 1;
+//     else if (sortBy === 'price_desc') sort.displayPrice = -1;
+//     else if (sortBy === 'rating_desc') sort.averageRating = -1;
+//     else if (sortBy === 'popularity') sort.totalSold = -1;
+//     else if (sortBy === 'newest') sort.createdAt = -1;
+//     else sort.createdAt = -1;
+
+//     const products = await Product.find(query)
+//       .populate('categoryId', 'name')
+//       .sort(sort)
+//       .skip(skip)
+//       .limit(parseInt(limit));
+
+//     const total = await Product.countDocuments(query);
+
+//     // Get unique colors and sizes from filtered products for filter UI
+//     let allColors = [];
+//     let allSizes = [];
+//     let priceRange = { min: 0, max: 0 };
+
+//     if (products.length > 0) {
+//       // Get price range from filtered products
+//       const priceStats = await Product.aggregate([
+//         { $match: query },
+//         {
+//           $group: {
+//             _id: null,
+//             minPrice: { $min: '$displayPrice' },
+//             maxPrice: { $max: '$displayPrice' }
+//           }
+//         }
+//       ]);
+//       if (priceStats.length > 0) {
+//         priceRange = { min: priceStats[0].minPrice, max: priceStats[0].maxPrice };
+//       }
+
+//       // Get unique colors from filtered products
+//       const colorResults = await Product.aggregate([
+//         { $match: query },
+//         { $unwind: '$variants' },
+//         { $group: { _id: '$variants.color' } }
+//       ]);
+//       allColors = colorResults.map(c => c._id).filter(c => c);
+
+//       // Get unique sizes from filtered products
+//       const sizeResults = await Product.aggregate([
+//         { $match: query },
+//         { $unwind: '$variants' },
+//         { $unwind: '$variants.sizes' },
+//         { $group: { _id: '$variants.sizes.size' } }
+//       ]);
+//       allSizes = sizeResults.map(s => s._id).filter(s => s);
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       count: products.length,
+//       total,
+//       page: parseInt(page),
+//       pages: Math.ceil(total / parseInt(limit)),
+//       filters: {
+//         colors: allColors,
+//         sizes: allSizes,
+//         priceRange
+//       },
+//       products
+//     });
+
+//   } catch (error) {
+//     console.error('getAllProducts error:', error);
+//     return res.status(500).json({
+//       success: false,
+//       message: 'Internal server error'
+//     });
+//   }
+// };
+
 // Get Product By ID
+
+
 export const getProductById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -1363,7 +1489,6 @@ export const updateProductById = async (req, res) => {
       categoryId,
       subcategoryId,
       variants,
-      deliveryAddresses,
       tags,
       isActive
     } = req.body;
@@ -1485,15 +1610,6 @@ export const updateProductById = async (req, res) => {
         getFileUrl(req, path.basename(file.path), 'products')
       );
       product.sizeGuide = newVideoUrls;
-    }
-
-    // Update delivery addresses
-    if (deliveryAddresses) {
-      try {
-        product.deliveryAddresses = typeof deliveryAddresses === 'string' 
-          ? JSON.parse(deliveryAddresses) 
-          : deliveryAddresses;
-      } catch (e) {}
     }
 
     // Update tags
@@ -2648,7 +2764,7 @@ const extractYouTubeId = (url) => {
  */
 export const addHeroSection = async (req, res) => {
   try {
-    const { type, order, url } = req.body;
+    const { type, order, url, redirectionLink  } = req.body;
     const file = req.file;
 
     if (!type || !['image', 'video', 'youtube'].includes(type)) {
@@ -2701,6 +2817,7 @@ export const addHeroSection = async (req, res) => {
       filename,
       url: fileUrl,
       order: order !== undefined ? order : homePage.heroSections.length,
+      redirectionLink : redirectionLink || null,
       isActive: true
     });
 
@@ -2784,7 +2901,7 @@ export const getHeroSectionById = async (req, res) => {
 export const updateHeroSection = async (req, res) => {
   try {
     const { heroId } = req.params;
-    const { type, order, isActive, url } = req.body;
+    const { type, order, isActive, url, redirectionLink  } = req.body;
     const file = req.file;
 
     const homePage = await HomePage.findOne();
@@ -2800,6 +2917,10 @@ export const updateHeroSection = async (req, res) => {
     if (type) hero.type = type;
     if (order !== undefined) hero.order = order;
     if (isActive !== undefined) hero.isActive = isActive === 'true';
+
+    if (redirectionLink !== undefined) {
+      hero.redirectionLink = redirectionLink || null;
+    }
 
     // Handle file update for image/video
     if (file && (hero.type === 'image' || hero.type === 'video')) {
@@ -2912,7 +3033,7 @@ export const toggleHeroSection = async (req, res) => {
  */
 export const addBannerSection = async (req, res) => {
   try {
-    const { title, subtitle, tag, buttonText, order } = req.body;
+    const { title, subtitle, tag, buttonText, order, redirectionLink } = req.body;
     const file = req.file;
 
     if (!title || !file) {
@@ -2941,6 +3062,7 @@ export const addBannerSection = async (req, res) => {
       tag: tag || '',
       buttonText: buttonText || 'Shop Now',
       image: imageUrl,
+      redirectionLink: redirectionLink || null,
       order: order || homePage.banners.length,
       isActive: true
     });
@@ -3025,7 +3147,7 @@ export const getBannerSectionById = async (req, res) => {
 export const updateBannerSection = async (req, res) => {
   try {
     const { bannerId } = req.params;
-    const { title, subtitle, tag, buttonText, order, isActive } = req.body;
+    const { title, subtitle, tag, buttonText, order,  redirectionLink, isActive } = req.body;
     const file = req.file;
 
     const homePage = await HomePage.findOne();
@@ -3044,6 +3166,10 @@ export const updateBannerSection = async (req, res) => {
     if (buttonText) banner.buttonText = buttonText;
     if (order !== undefined) banner.order = order;
     if (isActive !== undefined) banner.isActive = isActive === 'true';
+
+    if (redirectionLink !== undefined) {
+      banner.redirectionLink = redirectionLink || null;
+    }
 
 
     if (file) {
@@ -5022,7 +5148,6 @@ export const getPendingDesignerProducts = async (req, res) => {
         subcategoryName: obj.subcategoryName || null,
         subcategoryId: obj.subcategoryId || null,
         tags: obj.tags || [],
-        deliveryAddresses: obj.deliveryAddresses || [],
         variants: obj.variants?.map(v => ({
           color: v.color,
           price: v.price,
