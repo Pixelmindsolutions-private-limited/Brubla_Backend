@@ -862,10 +862,184 @@ const deleteProductFiles = (filePaths) => {
 
 
 // Controller/adminController.js - Updated createProduct for new structure
+// export const createProduct = async (req, res) => {
+//   try {
+//     let userId = req.user?.id;
+//     let userRole = req.user?.role;
+
+//     if (!userId || !userRole) {
+//       return res.status(401).json({
+//         success: false,
+//         message: 'Authentication required. Please login.'
+//       });
+//     }
+
+//     const {
+//       name,
+//       description,
+//       categoryId,
+//       subcategoryId,
+//       variants,
+//       tags
+//     } = req.body;
+
+//     if (!['admin', 'designer', 'tailor', 'Stylist'].includes(userRole)) {
+//       return res.status(403).json({
+//         success: false,
+//         message: 'Only Admin, Designer, Tailor, or Stylist can create products'
+//       });
+//     }
+
+//     if (!name || !description || !categoryId || !subcategoryId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Missing required fields: name, description, categoryId, subcategoryId'
+//       });
+//     }
+
+//     // Parse variants
+//     let variantsArray = [];
+//     try {
+//       variantsArray = typeof variants === 'string' ? JSON.parse(variants) : variants;
+//     } catch (e) {
+//       variantsArray = [];
+//     }
+
+//     if (!variantsArray.length) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'At least one color variant is required'
+//       });
+//     }
+
+//     // Validate category
+//     const category = await Category.findById(categoryId);
+//     if (!category) {
+//       return res.status(404).json({ success: false, message: 'Category not found' });
+//     }
+
+//     const subcategory = category.subcategories.id(subcategoryId);
+//     if (!subcategory) {
+//       return res.status(404).json({ success: false, message: 'Subcategory not found' });
+//     }
+
+//     // ✅ PROCESS FILES
+//     // Group images by variant field name
+//     const variantImageMap = {};
+//     const videoFiles = [];
+    
+//     if (req.files && Array.isArray(req.files)) {
+//       req.files.forEach(file => {
+//         if (file.mimetype.startsWith('image/')) {
+//           // Extract variant index from fieldname (e.g., "variant_0_images" -> 0)
+//           const match = file.fieldname.match(/variant_(\d+)_images/);
+//           if (match) {
+//             const variantIndex = parseInt(match[1]);
+//             if (!variantImageMap[variantIndex]) {
+//               variantImageMap[variantIndex] = [];
+//             }
+//             variantImageMap[variantIndex].push(file);
+//           }
+//         } else if (file.mimetype.startsWith('video/')) {
+//           videoFiles.push(file);
+//         }
+//       });
+//     }
+
+//     console.log('📸 Variant images:', Object.keys(variantImageMap).map(k => `${k}: ${variantImageMap[k].length} images`).join(', '));
+
+//     // Process variants
+//     const processedVariants = variantsArray.map((variant, index) => {
+//       let variantImages = [];
+      
+//       if (variantImageMap[index] && variantImageMap[index].length > 0) {
+//         variantImages = variantImageMap[index].map(file => 
+//           getFileUrl(req, path.basename(file.path), 'products')
+//         );
+//       }
+
+//       let sizesArray = variant.sizes || [];
+//       if (typeof sizesArray === 'string') {
+//         try {
+//           sizesArray = JSON.parse(sizesArray);
+//         } catch (e) {
+//           sizesArray = [];
+//         }
+//       }
+
+//       return {
+//         color: variant.color,
+//         price: parseFloat(variant.price),
+//         discountPrice: variant.discountPrice ? parseFloat(variant.discountPrice) : null,
+//         sizes: sizesArray,
+//         images: variantImages,
+//         isActive: true
+//       };
+//     });
+
+//     const videoUrls = videoFiles.map(file => 
+//       getFileUrl(req, path.basename(file.path), 'products')
+//     );
+
+//     let addressesArray = [];
+    
+
+//     let tagsArray = [];
+//     if (tags) {
+//       try {
+//         tagsArray = typeof tags === 'string' ? JSON.parse(tags) : tags;
+//       } catch (e) {}
+//     }
+
+//     let creatorDetails = null;
+//     if (userRole !== 'admin') {
+//       const user = await User.findById(userId);
+//       if (user) {
+//         creatorDetails = {
+//           name: user.name,
+//           profileImage: user.profileImage || '',
+//           role: userRole,
+//           brandName: userRole === 'designer' ? user.name : undefined,
+//           shopName: userRole === 'tailor' ? user.name : undefined
+//         };
+//       }
+//     }
+
+//     const product = new Product({
+//       name,
+//       description,
+//       categoryId,
+//       subcategoryId,
+//       subcategoryName: subcategory.name,
+//       variants: processedVariants,
+//       tags: tagsArray,
+//       createdBy: userRole,
+//       creatorId: userId,
+//       creatorDetails
+//     });
+
+//     await product.save();
+
+//     return res.status(201).json({
+//       success: true,
+//       message: userRole === 'admin' ? 'Product created successfully' : 'Product submitted for admin approval',
+//       product,
+//       requiresApproval: userRole !== 'admin'
+//     });
+
+//   } catch (error) {
+//     console.error('createProduct error:', error);
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message || 'Internal server error'
+//     });
+//   }
+// };
+
 export const createProduct = async (req, res) => {
   try {
-    let userId = req.user?.id;
-    let userRole = req.user?.role;
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
 
     if (!userId || !userRole) {
       return res.status(401).json({
@@ -875,12 +1049,10 @@ export const createProduct = async (req, res) => {
     }
 
     const {
-      name,
-      description,
-      categoryId,
-      subcategoryId,
-      variants,
-      tags
+      name, description, shortDescription,
+      categoryId, subcategoryId,
+      variants, tags, brand, gender, exclusiveProduct,
+      specifications, shipping, deliveryOptions, additionalSettings
     } = req.body;
 
     if (!['admin', 'designer', 'tailor', 'Stylist'].includes(userRole)) {
@@ -901,9 +1073,7 @@ export const createProduct = async (req, res) => {
     let variantsArray = [];
     try {
       variantsArray = typeof variants === 'string' ? JSON.parse(variants) : variants;
-    } catch (e) {
-      variantsArray = [];
-    }
+    } catch (e) { variantsArray = []; }
 
     if (!variantsArray.length) {
       return res.status(400).json({
@@ -917,54 +1087,51 @@ export const createProduct = async (req, res) => {
     if (!category) {
       return res.status(404).json({ success: false, message: 'Category not found' });
     }
-
     const subcategory = category.subcategories.id(subcategoryId);
     if (!subcategory) {
       return res.status(404).json({ success: false, message: 'Subcategory not found' });
     }
 
-    // ✅ PROCESS FILES
-    // Group images by variant field name
-    const variantImageMap = {};
-    const videoFiles = [];
-    
+    // ---------- Process files ----------
+    const variantImageMap = {};   // { variantIndex: [files] }
+    const videoFiles = [];        // all video files
+
     if (req.files && Array.isArray(req.files)) {
       req.files.forEach(file => {
         if (file.mimetype.startsWith('image/')) {
-          // Extract variant index from fieldname (e.g., "variant_0_images" -> 0)
-          const match = file.fieldname.match(/variant_(\d+)_images/);
+          // Must be variant_<N>_images (already validated by multer, but parse anyway)
+          const match = file.fieldname.match(/^variant_(\d+)_images$/);
           if (match) {
-            const variantIndex = parseInt(match[1]);
-            if (!variantImageMap[variantIndex]) {
-              variantImageMap[variantIndex] = [];
-            }
-            variantImageMap[variantIndex].push(file);
+            const idx = parseInt(match[1]);
+            if (!variantImageMap[idx]) variantImageMap[idx] = [];
+            variantImageMap[idx].push(file);
           }
         } else if (file.mimetype.startsWith('video/')) {
-          videoFiles.push(file);
+          // Only accept `product_video` fieldname (multer already enforced)
+          if (file.fieldname === 'product_video') {
+            videoFiles.push(file);
+          }
         }
       });
     }
 
-    console.log('📸 Variant images:', Object.keys(variantImageMap).map(k => `${k}: ${variantImageMap[k].length} images`).join(', '));
+    console.log('📸 Variant images:', Object.keys(variantImageMap)
+      .map(k => `${k}: ${variantImageMap[k].length}`).join(', '));
+    console.log('🎥 Video files:', videoFiles.length);
 
-    // Process variants
+    // Build variants
     const processedVariants = variantsArray.map((variant, index) => {
       let variantImages = [];
-      
+
       if (variantImageMap[index] && variantImageMap[index].length > 0) {
-        variantImages = variantImageMap[index].map(file => 
-          getFileUrl(req, path.basename(file.path), 'products')
+        variantImages = variantImageMap[index].map(file =>
+          getFileUrl(req, path.basename(file.path), file.mimetype.startsWith('video/') ? 'products/videos' : 'products/images')
         );
       }
 
       let sizesArray = variant.sizes || [];
       if (typeof sizesArray === 'string') {
-        try {
-          sizesArray = JSON.parse(sizesArray);
-        } catch (e) {
-          sizesArray = [];
-        }
+        try { sizesArray = JSON.parse(sizesArray); } catch (e) { sizesArray = []; }
       }
 
       return {
@@ -977,20 +1144,35 @@ export const createProduct = async (req, res) => {
       };
     });
 
-    const videoUrls = videoFiles.map(file => 
-      getFileUrl(req, path.basename(file.path), 'products')
+    // Build video URLs
+    const videoUrls = videoFiles.map(file =>
+      getFileUrl(req, path.basename(file.path), 'products/videos')
     );
 
-    let addressesArray = [];
-    
-
+    // Parse tags, flags, nested objects
     let tagsArray = [];
     if (tags) {
-      try {
-        tagsArray = typeof tags === 'string' ? JSON.parse(tags) : tags;
-      } catch (e) {}
+      try { tagsArray = typeof tags === 'string' ? JSON.parse(tags) : tags; } catch (e) {}
     }
 
+    let isExclusive = false;
+    if (exclusiveProduct !== undefined) {
+      isExclusive = typeof exclusiveProduct === 'boolean'
+        ? exclusiveProduct
+        : exclusiveProduct === 'true' || exclusiveProduct === '1';
+    }
+
+    const parseJSON = (val) => {
+      if (!val) return null;
+      try { return typeof val === 'string' ? JSON.parse(val) : val; } catch (e) { return null; }
+    };
+
+    const specsObj = parseJSON(specifications) || {};
+    const shippingObj = parseJSON(shipping) || {};
+    const deliveryObj = parseJSON(deliveryOptions) || {};
+    const settingsArray = parseJSON(additionalSettings);
+
+    // Creator details
     let creatorDetails = null;
     if (userRole !== 'admin') {
       const user = await User.findById(userId);
@@ -1005,25 +1187,40 @@ export const createProduct = async (req, res) => {
       }
     }
 
-    const product = new Product({
+    // Build product payload
+    const productPayload = {
       name,
       description,
+      shortDescription: shortDescription || '',
       categoryId,
       subcategoryId,
       subcategoryName: subcategory.name,
+      brand: brand || '',
+      gender: gender || 'Unisex',
+      exclusiveProduct: isExclusive,
+      specifications: specsObj,
+      shipping: shippingObj,
+      deliveryOptions: deliveryObj,
       variants: processedVariants,
-      sizeGuide: videoUrls,
+      productVideos: videoUrls,   // ✅ videos here
       tags: tagsArray,
       createdBy: userRole,
       creatorId: userId,
       creatorDetails
-    });
+    };
 
+    if (settingsArray && Array.isArray(settingsArray) && settingsArray.length > 0) {
+      productPayload.additionalSettings = settingsArray;
+    }
+
+    const product = new Product(productPayload);
     await product.save();
 
     return res.status(201).json({
       success: true,
-      message: userRole === 'admin' ? 'Product created successfully' : 'Product submitted for admin approval',
+      message: userRole === 'admin'
+        ? 'Product created successfully'
+        : 'Product submitted for admin approval',
       product,
       requiresApproval: userRole !== 'admin'
     });
@@ -1036,6 +1233,206 @@ export const createProduct = async (req, res) => {
     });
   }
 };
+
+// const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// export const getAllProducts = async (req, res) => {
+//   try {
+//     const {
+//       categoryId,
+//       subcategoryId,
+//       isActive,
+//       minPrice,
+//       maxPrice,
+//       sortBy,
+//       page = 1,
+//       limit = 20,
+//       colors,
+//       sizes,
+//       search,
+//       rating,
+//       tags
+//     } = req.query;
+
+//     // ============== MAIN QUERY (includes all narrowing filters) ==============
+//     let query = {};
+
+//     if (categoryId) query.categoryId = categoryId;
+//     if (subcategoryId) query.subcategoryId = subcategoryId;
+//     if (isActive !== undefined) query.isActive = isActive === 'true';
+
+//     // Price filter
+//     if (minPrice || maxPrice) {
+//       query.displayPrice = {};
+//       if (minPrice) query.displayPrice.$gte = parseFloat(minPrice);
+//       if (maxPrice) query.displayPrice.$lte = parseFloat(maxPrice);
+//     }
+
+//     // ✅ Color filter — case-insensitive exact match, supports comma-separated list
+//     if (colors) {
+//       const colorArray = colors.split(',').map(c => c.trim()).filter(Boolean);
+//       if (colorArray.length > 0) {
+//         query['variants.color'] = {
+//           $in: colorArray.map(c => new RegExp(`^${escapeRegex(c)}$`, 'i'))
+//         };
+//       }
+//     }
+
+//     // ✅ Size filter — case-insensitive exact match, supports comma-separated list
+//     if (sizes) {
+//       const sizeArray = sizes.split(',').map(s => s.trim()).filter(Boolean);
+//       if (sizeArray.length > 0) {
+//         query['variants.sizes.size'] = {
+//           $in: sizeArray.map(s => new RegExp(`^${escapeRegex(s)}$`, 'i'))
+//         };
+//       }
+//     }
+
+//     // Rating filter
+//     if (rating) {
+//       query.averageRating = { $gte: parseFloat(rating) };
+//     }
+
+//     // Tags filter
+//     if (tags) {
+//       const tagsArray = tags.split(',').map(t => t.trim()).filter(Boolean);
+//       if (tagsArray.length > 0) {
+//         query.tags = { $in: tagsArray };
+//       }
+//     }
+
+//     // Search filter
+//     if (search) {
+//       query.$or = [
+//         { name: { $regex: escapeRegex(search), $options: 'i' } },
+//         { description: { $regex: escapeRegex(search), $options: 'i' } }
+//       ];
+//     }
+
+//     // Public-user approval scope
+//     if (!req.user || req.user.role !== 'admin') {
+//       query.approvalStatus = { $in: ['approved', 'not_required'] };
+//       query.isActive = true;
+//     }
+
+//     // ============== PAGINATION + SORT ==============
+//     const skip = (parseInt(page) - 1) * parseInt(limit);
+
+//     let sort = {};
+//     if (sortBy === 'price_asc') sort.displayPrice = 1;
+//     else if (sortBy === 'price_desc') sort.displayPrice = -1;
+//     else if (sortBy === 'rating_desc') sort.averageRating = -1;
+//     else if (sortBy === 'popularity') sort.totalSold = -1;
+//     else if (sortBy === 'newest') sort.createdAt = -1;
+//     else sort.createdAt = -1;
+
+//     const products = await Product.find(query)
+//       .populate('categoryId', 'name')
+//       .sort(sort)
+//       .skip(skip)
+//       .limit(parseInt(limit));
+
+//     const total = await Product.countDocuments(query);
+
+//     // ============== FILTER OPTIONS (ignore narrowing filters) ==============
+//     // Build a "base" query WITHOUT colors/sizes/price/rating/tags
+//     // so filter chips don't disappear when applied.
+//     const baseQuery = {};
+//     if (categoryId) baseQuery.categoryId = categoryId;
+//     if (subcategoryId) baseQuery.subcategoryId = subcategoryId;
+//     if (isActive !== undefined) baseQuery.isActive = isActive === 'true';
+//     if (search) {
+//       baseQuery.$or = [
+//         { name: { $regex: escapeRegex(search), $options: 'i' } },
+//         { description: { $regex: escapeRegex(search), $options: 'i' } }
+//       ];
+//     }
+//     if (!req.user || req.user.role !== 'admin') {
+//       baseQuery.approvalStatus = { $in: ['approved', 'not_required'] };
+//       baseQuery.isActive = true;
+//     }
+
+//     let allColors = [];
+//     let allSizes = [];
+//     let priceRange = { min: 0, max: 0 };
+
+//     // Price range
+//     const priceStats = await Product.aggregate([
+//       { $match: baseQuery },
+//       {
+//         $group: {
+//           _id: null,
+//           minPrice: { $min: '$displayPrice' },
+//           maxPrice: { $max: '$displayPrice' }
+//         }
+//       }
+//     ]);
+//     if (priceStats.length > 0) {
+//       priceRange = { min: priceStats[0].minPrice, max: priceStats[0].maxPrice };
+//     }
+
+//     // ✅ Unique colors — case-insensitive dedup, alphabetical
+//     const colorResults = await Product.aggregate([
+//       { $match: baseQuery },
+//       { $unwind: '$variants' },
+//       {
+//         $group: {
+//           _id: { $toLower: '$variants.color' },
+//           original: { $first: '$variants.color' }
+//         }
+//       },
+//       { $sort: { original: 1 } }
+//     ]);
+//     allColors = colorResults.map(c => c.original).filter(Boolean);
+
+//     // ✅ Unique sizes — case-insensitive dedup, logical size order
+//     const sizeResults = await Product.aggregate([
+//       { $match: baseQuery },
+//       { $unwind: '$variants' },
+//       { $unwind: '$variants.sizes' },
+//       {
+//         $group: {
+//           _id: { $toLower: '$variants.sizes.size' },
+//           original: { $first: '$variants.sizes.size' }
+//         }
+//       }
+//     ]);
+
+//     const SIZE_ORDER = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', 'Custom'];
+//     allSizes = sizeResults
+//       .map(s => s.original)
+//       .filter(Boolean)
+//       .sort((a, b) => {
+//         const ai = SIZE_ORDER.findIndex(s => s.toLowerCase() === a.toLowerCase());
+//         const bi = SIZE_ORDER.findIndex(s => s.toLowerCase() === b.toLowerCase());
+//         if (ai === -1 && bi === -1) return a.localeCompare(b);
+//         if (ai === -1) return 1;
+//         if (bi === -1) return -1;
+//         return ai - bi;
+//       });
+
+//     return res.status(200).json({
+//       success: true,
+//       count: products.length,
+//       total,
+//       page: parseInt(page),
+//       pages: Math.ceil(total / parseInt(limit)),
+//       filters: {
+//         colors: allColors,
+//         sizes: allSizes,
+//         priceRange
+//       },
+//       products
+//     });
+
+//   } catch (error) {
+//     console.error('getAllProducts error:', error);
+//     return res.status(500).json({
+//       success: false,
+//       message: 'Internal server error'
+//     });
+//   }
+// };
 
 const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -1054,24 +1451,114 @@ export const getAllProducts = async (req, res) => {
       sizes,
       search,
       rating,
-      tags
+      tags,
+      // ---------- NEW FILTERS ----------
+      brand,
+      gender,
+      exclusiveProduct,
+      fabric,
+      pattern,
+      fit,
+      occasion,
+      sleeve,
+      neck,
+      length,
+      washCare,
+      // Additional settings flags
+      newArrival,
+      featured,
+      returnable,
+      bestSeller,
+      exchangeAvailable
     } = req.query;
 
-    // ============== MAIN QUERY (includes all narrowing filters) ==============
+    // ============== MAIN QUERY ==============
     let query = {};
 
     if (categoryId) query.categoryId = categoryId;
     if (subcategoryId) query.subcategoryId = subcategoryId;
     if (isActive !== undefined) query.isActive = isActive === 'true';
 
-    // Price filter
+    // ---------- Brand (supports comma-separated) ----------
+    if (brand) {
+      const brandArr = brand.split(',').map(b => b.trim()).filter(Boolean);
+      if (brandArr.length > 0) {
+        query.brand = { $in: brandArr.map(b => new RegExp(`^${escapeRegex(b)}$`, 'i')) };
+      }
+    }
+
+    // ---------- Gender (supports comma-separated) ----------
+    if (gender) {
+      const genderArr = gender.split(',').map(g => g.trim()).filter(Boolean);
+      if (genderArr.length > 0) {
+        query.gender = { $in: genderArr.map(g => new RegExp(`^${escapeRegex(g)}$`, 'i')) };
+      }
+    }
+
+    // ---------- Exclusive ----------
+    if (exclusiveProduct !== undefined) {
+      query.exclusiveProduct = exclusiveProduct === 'true';
+    }
+
+    // ---------- Specifications ----------
+    const specFilter = (field, val) => {
+      if (!val) return;
+      const arr = val.split(',').map(v => v.trim()).filter(Boolean);
+      if (arr.length > 0) {
+        query[`specifications.${field}`] = {
+          $in: arr.map(v => new RegExp(`^${escapeRegex(v)}$`, 'i'))
+        };
+      }
+    };
+
+    specFilter('fabric', fabric);
+    specFilter('pattern', pattern);
+    specFilter('fit', fit);
+    specFilter('occasion', occasion);
+    specFilter('sleeve', sleeve);
+    specFilter('neck', neck);
+    specFilter('length', length);
+    specFilter('washCare', washCare);
+
+    // ---------- Additional Settings ----------
+    const settingFilter = (key, val) => {
+      if (val === undefined) return;
+      const boolVal = val === 'true' || val === true;
+      query.additionalSettings = query.additionalSettings || {};
+      query.additionalSettings.$elemMatch = query.additionalSettings.$elemMatch || {};
+      // Accumulate into $and instead — safer
+    };
+
+    // Better approach for multiple settings filters
+    const settingsConditions = [];
+    if (newArrival !== undefined) {
+      settingsConditions.push({ additionalSettings: { $elemMatch: { key: 'newArrival', value: newArrival === 'true' } } });
+    }
+    if (featured !== undefined) {
+      settingsConditions.push({ additionalSettings: { $elemMatch: { key: 'featured', value: featured === 'true' } } });
+    }
+    if (returnable !== undefined) {
+      settingsConditions.push({ additionalSettings: { $elemMatch: { key: 'returnable', value: returnable === 'true' } } });
+    }
+    if (bestSeller !== undefined) {
+      settingsConditions.push({ additionalSettings: { $elemMatch: { key: 'bestSeller', value: bestSeller === 'true' } } });
+    }
+    if (exchangeAvailable !== undefined) {
+      settingsConditions.push({ additionalSettings: { $elemMatch: { key: 'exchangeAvailable', value: exchangeAvailable === 'true' } } });
+    }
+
+    if (settingsConditions.length > 0) {
+      query.$and = (query.$and || []).concat(settingsConditions);
+    }
+
+    // ---------- Price filter ----------
     if (minPrice || maxPrice) {
       query.displayPrice = {};
       if (minPrice) query.displayPrice.$gte = parseFloat(minPrice);
       if (maxPrice) query.displayPrice.$lte = parseFloat(maxPrice);
     }
 
-    // ✅ Color filter — case-insensitive exact match, supports comma-separated list
+    // ---------- Colors ----------
     if (colors) {
       const colorArray = colors.split(',').map(c => c.trim()).filter(Boolean);
       if (colorArray.length > 0) {
@@ -1081,7 +1568,7 @@ export const getAllProducts = async (req, res) => {
       }
     }
 
-    // ✅ Size filter — case-insensitive exact match, supports comma-separated list
+    // ---------- Sizes ----------
     if (sizes) {
       const sizeArray = sizes.split(',').map(s => s.trim()).filter(Boolean);
       if (sizeArray.length > 0) {
@@ -1091,12 +1578,12 @@ export const getAllProducts = async (req, res) => {
       }
     }
 
-    // Rating filter
+    // ---------- Rating ----------
     if (rating) {
       query.averageRating = { $gte: parseFloat(rating) };
     }
 
-    // Tags filter
+    // ---------- Tags ----------
     if (tags) {
       const tagsArray = tags.split(',').map(t => t.trim()).filter(Boolean);
       if (tagsArray.length > 0) {
@@ -1104,15 +1591,17 @@ export const getAllProducts = async (req, res) => {
       }
     }
 
-    // Search filter
+    // ---------- Search ----------
     if (search) {
       query.$or = [
         { name: { $regex: escapeRegex(search), $options: 'i' } },
-        { description: { $regex: escapeRegex(search), $options: 'i' } }
+        { description: { $regex: escapeRegex(search), $options: 'i' } },
+        { shortDescription: { $regex: escapeRegex(search), $options: 'i' } },
+        { brand: { $regex: escapeRegex(search), $options: 'i' } }
       ];
     }
 
-    // Public-user approval scope
+    // ---------- Public user scope ----------
     if (!req.user || req.user.role !== 'admin') {
       query.approvalStatus = { $in: ['approved', 'not_required'] };
       query.isActive = true;
@@ -1137,9 +1626,8 @@ export const getAllProducts = async (req, res) => {
 
     const total = await Product.countDocuments(query);
 
-    // ============== FILTER OPTIONS (ignore narrowing filters) ==============
-    // Build a "base" query WITHOUT colors/sizes/price/rating/tags
-    // so filter chips don't disappear when applied.
+    // ============== FILTER OPTIONS ==============
+    // Base query WITHOUT narrowing filters (so chips don't disappear)
     const baseQuery = {};
     if (categoryId) baseQuery.categoryId = categoryId;
     if (subcategoryId) baseQuery.subcategoryId = subcategoryId;
@@ -1147,7 +1635,8 @@ export const getAllProducts = async (req, res) => {
     if (search) {
       baseQuery.$or = [
         { name: { $regex: escapeRegex(search), $options: 'i' } },
-        { description: { $regex: escapeRegex(search), $options: 'i' } }
+        { description: { $regex: escapeRegex(search), $options: 'i' } },
+        { shortDescription: { $regex: escapeRegex(search), $options: 'i' } }
       ];
     }
     if (!req.user || req.user.role !== 'admin') {
@@ -1157,6 +1646,8 @@ export const getAllProducts = async (req, res) => {
 
     let allColors = [];
     let allSizes = [];
+    let allBrands = [];
+    let allGenders = [];
     let priceRange = { min: 0, max: 0 };
 
     // Price range
@@ -1174,7 +1665,7 @@ export const getAllProducts = async (req, res) => {
       priceRange = { min: priceStats[0].minPrice, max: priceStats[0].maxPrice };
     }
 
-    // ✅ Unique colors — case-insensitive dedup, alphabetical
+    // Unique colors
     const colorResults = await Product.aggregate([
       { $match: baseQuery },
       { $unwind: '$variants' },
@@ -1188,7 +1679,7 @@ export const getAllProducts = async (req, res) => {
     ]);
     allColors = colorResults.map(c => c.original).filter(Boolean);
 
-    // ✅ Unique sizes — case-insensitive dedup, logical size order
+    // Unique sizes
     const sizeResults = await Product.aggregate([
       { $match: baseQuery },
       { $unwind: '$variants' },
@@ -1214,6 +1705,22 @@ export const getAllProducts = async (req, res) => {
         return ai - bi;
       });
 
+    // Unique brands
+    const brandResults = await Product.aggregate([
+      { $match: { ...baseQuery, brand: { $nin: ['', null] } } },
+      { $group: { _id: { $toLower: '$brand' }, original: { $first: '$brand' } } },
+      { $sort: { original: 1 } }
+    ]);
+    allBrands = brandResults.map(b => b.original).filter(Boolean);
+
+    // Unique genders
+    const genderResults = await Product.aggregate([
+      { $match: { ...baseQuery, gender: { $nin: ['', null] } } },
+      { $group: { _id: { $toLower: '$gender' }, original: { $first: '$gender' } } },
+      { $sort: { original: 1 } }
+    ]);
+    allGenders = genderResults.map(g => g.original).filter(Boolean);
+
     return res.status(200).json({
       success: true,
       count: products.length,
@@ -1223,6 +1730,8 @@ export const getAllProducts = async (req, res) => {
       filters: {
         colors: allColors,
         sizes: allSizes,
+        brands: allBrands,
+        genders: allGenders,
         priceRange
       },
       products
@@ -1236,168 +1745,6 @@ export const getAllProducts = async (req, res) => {
     });
   }
 };
-
-// export const getAllProducts = async (req, res) => {
-//   try {
-//     const {
-//       categoryId,
-//       subcategoryId,
-//       isActive,
-//       minPrice,
-//       maxPrice,
-//       sortBy,
-//       page = 1,
-//       limit = 20,
-//       colors,
-//       sizes,
-//       search,
-//       rating,
-//       tags
-//     } = req.query;
-
-//     let query = {};
-
-//     // ✅ Apply category filter (works as query param)
-//     if (categoryId) {
-//       query.categoryId = categoryId;
-//     }
-
-//     // ✅ Apply subcategory filter (works as query param)
-//     if (subcategoryId) {
-//       query.subcategoryId = subcategoryId;
-//     }
-
-//     // Apply basic filters
-//     if (isActive !== undefined) query.isActive = isActive === 'true';
-
-//     // Price filter
-//     if (minPrice || maxPrice) {
-//       query.displayPrice = {};
-//       if (minPrice) query.displayPrice.$gte = parseFloat(minPrice);
-//       if (maxPrice) query.displayPrice.$lte = parseFloat(maxPrice);
-//     }
-
-//     // Color filter (search in variants array)
-//     if (colors) {
-//       const colorArray = colors.split(',');
-//       query['variants.color'] = { $in: colorArray };
-//     }
-
-//     // Size filter (search in variants.sizes array)
-//     if (sizes) {
-//       const sizeArray = sizes.split(',');
-//       query['variants.sizes.size'] = { $in: sizeArray };
-//     }
-
-//     // Rating filter
-//     if (rating) {
-//       query.averageRating = { $gte: parseFloat(rating) };
-//     }
-
-//     // Tags filter
-//     if (tags) {
-//       const tagsArray = tags.split(',');
-//       query.tags = { $in: tagsArray };
-//     }
-
-//     // Search filter (text search on name and description)
-//     if (search) {
-//       query.$or = [
-//         { name: { $regex: search, $options: 'i' } },
-//         { description: { $regex: search, $options: 'i' } }
-//       ];
-//     }
-
-//     // Approval filter for public users
-//     if (!req.user || req.user.role !== 'admin') {
-//       query.approvalStatus = { $in: ['approved', 'not_required'] };
-//       query.isActive = true;
-//     }
-
-//     // Pagination
-//     const skip = (parseInt(page) - 1) * parseInt(limit);
-
-//     // Sorting
-//     let sort = {};
-//     if (sortBy === 'price_asc') sort.displayPrice = 1;
-//     else if (sortBy === 'price_desc') sort.displayPrice = -1;
-//     else if (sortBy === 'rating_desc') sort.averageRating = -1;
-//     else if (sortBy === 'popularity') sort.totalSold = -1;
-//     else if (sortBy === 'newest') sort.createdAt = -1;
-//     else sort.createdAt = -1;
-
-//     const products = await Product.find(query)
-//       .populate('categoryId', 'name')
-//       .sort(sort)
-//       .skip(skip)
-//       .limit(parseInt(limit));
-
-//     const total = await Product.countDocuments(query);
-
-//     // Get unique colors and sizes from filtered products for filter UI
-//     let allColors = [];
-//     let allSizes = [];
-//     let priceRange = { min: 0, max: 0 };
-
-//     if (products.length > 0) {
-//       // Get price range from filtered products
-//       const priceStats = await Product.aggregate([
-//         { $match: query },
-//         {
-//           $group: {
-//             _id: null,
-//             minPrice: { $min: '$displayPrice' },
-//             maxPrice: { $max: '$displayPrice' }
-//           }
-//         }
-//       ]);
-//       if (priceStats.length > 0) {
-//         priceRange = { min: priceStats[0].minPrice, max: priceStats[0].maxPrice };
-//       }
-
-//       // Get unique colors from filtered products
-//       const colorResults = await Product.aggregate([
-//         { $match: query },
-//         { $unwind: '$variants' },
-//         { $group: { _id: '$variants.color' } }
-//       ]);
-//       allColors = colorResults.map(c => c._id).filter(c => c);
-
-//       // Get unique sizes from filtered products
-//       const sizeResults = await Product.aggregate([
-//         { $match: query },
-//         { $unwind: '$variants' },
-//         { $unwind: '$variants.sizes' },
-//         { $group: { _id: '$variants.sizes.size' } }
-//       ]);
-//       allSizes = sizeResults.map(s => s._id).filter(s => s);
-//     }
-
-//     return res.status(200).json({
-//       success: true,
-//       count: products.length,
-//       total,
-//       page: parseInt(page),
-//       pages: Math.ceil(total / parseInt(limit)),
-//       filters: {
-//         colors: allColors,
-//         sizes: allSizes,
-//         priceRange
-//       },
-//       products
-//     });
-
-//   } catch (error) {
-//     console.error('getAllProducts error:', error);
-//     return res.status(500).json({
-//       success: false,
-//       message: 'Internal server error'
-//     });
-//   }
-// };
-
-// Get Product By ID
-
 
 export const getProductById = async (req, res) => {
   try {
@@ -1479,24 +1826,187 @@ export const getProductsByCreatorId = async (req, res) => {
   }
 };
 
-// Update Product By ID - Updated for New Structure
+// // Update Product By ID - Updated for New Structure
+// export const updateProductById = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const {
+//       name,
+//       description,
+//       categoryId,
+//       subcategoryId,
+//       variants,
+//       tags,
+//       isActive
+//     } = req.body;
+
+//     const userId = req.user.id;
+//     const userRole = req.user.role;
+//     const imageFiles = req.files?.images || [];
+//     const videoFiles = req.files?.videos || [];
+
+//     const product = await Product.findById(id);
+//     if (!product) {
+//       return res.status(404).json({
+//         success: false,
+//         message: 'Product not found'
+//       });
+//     }
+
+//     // Check permissions
+//     if (product.creatorId.toString() !== userId && userRole !== 'admin') {
+//       return res.status(403).json({
+//         success: false,
+//         message: 'Unauthorized to update this product'
+//       });
+//     }
+
+//     // Update basic fields
+//     if (name) product.name = name;
+//     if (description) product.description = description;
+//     if (isActive !== undefined) {
+//       product.isActive = typeof isActive === 'boolean' ? isActive : isActive === 'true';
+//     }
+
+//     // Update category if changed
+//     if (categoryId && categoryId !== product.categoryId.toString()) {
+//       const category = await Category.findById(categoryId);
+//       if (!category) {
+//         return res.status(404).json({
+//           success: false,
+//           message: 'Category not found'
+//         });
+//       }
+      
+//       if (subcategoryId) {
+//         const subcategory = category.subcategories.id(subcategoryId);
+//         if (!subcategory) {
+//           return res.status(404).json({
+//             success: false,
+//             message: 'Subcategory not found'
+//           });
+//         }
+//         product.subcategoryName = subcategory.name;
+//         product.subcategoryId = subcategoryId;
+//       }
+      
+//       product.categoryId = categoryId;
+//     }
+
+//     // ✅ UPDATE VARIANTS - FIXED FOR NEW STRUCTURE
+//     if (variants) {
+//       try {
+//         let variantsArray = typeof variants === 'string' ? JSON.parse(variants) : variants;
+        
+//         // Track current image index for sequential distribution
+//         let currentImageIndex = 0;
+        
+//         // Process each variant for new structure
+//         const processedVariants = variantsArray.map((variant, index) => {
+//           let variantImages = [];
+          
+//           // Handle image distribution
+//           if (imageFiles.length > 0) {
+//             const imageCount = variant.imageCount || 1;
+//             if (imageCount > 0 && imageFiles.length > currentImageIndex) {
+//               variantImages = imageFiles
+//                 .slice(currentImageIndex, currentImageIndex + imageCount)
+//                 .map(file => getFileUrl(req, path.basename(file.path), 'products'));
+//               currentImageIndex += imageCount;
+//             }
+//           } else if (variant.images && Array.isArray(variant.images)) {
+//             // Keep existing images if no new ones
+//             variantImages = variant.images;
+//           }
+          
+//           // Process sizes array
+//           let sizesArray = variant.sizes || [];
+//           if (typeof sizesArray === 'string') {
+//             try {
+//               sizesArray = JSON.parse(sizesArray);
+//             } catch (e) {
+//               sizesArray = [];
+//             }
+//           }
+          
+//           return {
+//             color: variant.color,
+//             price: parseFloat(variant.price),
+//             discountPrice: variant.discountPrice ? parseFloat(variant.discountPrice) : null,
+//             sizes: sizesArray,
+//             images: variantImages,
+//             isActive: variant.isActive !== false
+//           };
+//         });
+        
+//         product.variants = processedVariants;
+        
+//       } catch (e) {
+//         console.error('Variants parse error:', e);
+//         return res.status(400).json({
+//           success: false,
+//           message: 'Invalid variants format',
+//           error: e.message
+//         });
+//       }
+//     }
+
+
+//     // Update tags
+//     if (tags) {
+//       try {
+//         product.tags = typeof tags === 'string' ? JSON.parse(tags) : tags;
+//       } catch (e) {}
+//     }
+
+//     // Reset approval for non-admin updates
+//     if (userRole !== 'admin' && product.approvalStatus === 'approved') {
+//       product.approvalStatus = 'pending';
+//       product.isActive = false;
+//     }
+
+//     await product.save();
+
+//     return res.status(200).json({
+//       success: true,
+//       message: userRole !== 'admin' && product.approvalStatus === 'pending'
+//         ? 'Product updated and submitted for re-approval'
+//         : 'Product updated successfully',
+//       product
+//     });
+
+//   } catch (error) {
+//     console.error('updateProductById error:', error);
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message || 'Internal server error'
+//     });
+//   }
+// };
+
 export const updateProductById = async (req, res) => {
   try {
     const { id } = req.params;
     const {
       name,
       description,
+      shortDescription,
       categoryId,
       subcategoryId,
       variants,
       tags,
-      isActive
+      isActive,
+      brand,
+      gender,
+      exclusiveProduct,
+      specifications,
+      shipping,
+      deliveryOptions,
+      additionalSettings
     } = req.body;
 
     const userId = req.user.id;
     const userRole = req.user.role;
-    const imageFiles = req.files?.images || [];
-    const videoFiles = req.files?.videos || [];
 
     const product = await Product.findById(id);
     if (!product) {
@@ -1506,7 +2016,7 @@ export const updateProductById = async (req, res) => {
       });
     }
 
-    // Check permissions
+    // ---------- Permissions ----------
     if (product.creatorId.toString() !== userId && userRole !== 'admin') {
       return res.status(403).json({
         success: false,
@@ -1514,14 +2024,103 @@ export const updateProductById = async (req, res) => {
       });
     }
 
-    // Update basic fields
+    // ═══════════════════════════════════════════════════════════════
+    // ✅ NEW FILE PROCESSING — same pattern as createProduct
+    // ═══════════════════════════════════════════════════════════════
+    const variantImageMap = {};   // { variantIndex: [files] }
+    const videoFiles = [];        // only `product_video` files
+
+    if (req.files && Array.isArray(req.files)) {
+      req.files.forEach(file => {
+        if (file.mimetype.startsWith('image/')) {
+          // Must match variant_<N>_images (already enforced by multer)
+          const match = file.fieldname.match(/^variant_(\d+)_images$/);
+          if (match) {
+            const idx = parseInt(match[1]);
+            if (!variantImageMap[idx]) variantImageMap[idx] = [];
+            variantImageMap[idx].push(file);
+          }
+        } else if (file.mimetype.startsWith('video/')) {
+          // Only accept `product_video` (already enforced by multer)
+          if (file.fieldname === 'product_video') {
+            videoFiles.push(file);
+          }
+        }
+      });
+    }
+
+    console.log('📸 Variant images (update):', Object.keys(variantImageMap)
+      .map(k => `${k}: ${variantImageMap[k].length}`).join(', ') || 'none');
+    console.log('🎥 Videos (update):', videoFiles.length);
+
+    // ═══════════════════════════════════════════════════════════════
+    // BASIC FIELDS
+    // ═══════════════════════════════════════════════════════════════
     if (name) product.name = name;
     if (description) product.description = description;
+    if (shortDescription !== undefined) product.shortDescription = shortDescription;
+    if (brand !== undefined) product.brand = brand;
+    if (gender !== undefined) product.gender = gender;
+
     if (isActive !== undefined) {
       product.isActive = typeof isActive === 'boolean' ? isActive : isActive === 'true';
     }
 
-    // Update category if changed
+    // ---------- exclusiveProduct ----------
+    if (exclusiveProduct !== undefined) {
+      if (typeof exclusiveProduct === 'boolean') {
+        product.exclusiveProduct = exclusiveProduct;
+      } else if (typeof exclusiveProduct === 'string') {
+        product.exclusiveProduct = exclusiveProduct === 'true' || exclusiveProduct === '1';
+      }
+    }
+
+    // ---------- Parse helper ----------
+    const parseJSON = (val) => {
+      if (!val) return null;
+      try {
+        return typeof val === 'string' ? JSON.parse(val) : val;
+      } catch (e) {
+        return null;
+      }
+    };
+
+    // ---------- Specifications (merge) ----------
+    const specs = parseJSON(specifications);
+    if (specs) {
+      product.specifications = {
+        ...(product.specifications?.toObject?.() || {}),
+        ...specs
+      };
+    }
+
+    // ---------- Shipping (merge) ----------
+    const ship = parseJSON(shipping);
+    if (ship) {
+      product.shipping = {
+        ...(product.shipping?.toObject?.() || {}),
+        ...ship
+      };
+    }
+
+    // ---------- Delivery options (merge) ----------
+    const del = parseJSON(deliveryOptions);
+    if (del) {
+      product.deliveryOptions = {
+        ...(product.deliveryOptions?.toObject?.() || {}),
+        ...del
+      };
+    }
+
+    // ---------- Additional settings (replace) ----------
+    const settings = parseJSON(additionalSettings);
+    if (Array.isArray(settings) && settings.length > 0) {
+      product.additionalSettings = settings;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // CATEGORY / SUBCATEGORY
+    // ═══════════════════════════════════════════════════════════════
     if (categoryId && categoryId !== product.categoryId.toString()) {
       const category = await Category.findById(categoryId);
       if (!category) {
@@ -1530,7 +2129,7 @@ export const updateProductById = async (req, res) => {
           message: 'Category not found'
         });
       }
-      
+
       if (subcategoryId) {
         const subcategory = category.subcategories.id(subcategoryId);
         if (!subcategory) {
@@ -1542,58 +2141,52 @@ export const updateProductById = async (req, res) => {
         product.subcategoryName = subcategory.name;
         product.subcategoryId = subcategoryId;
       }
-      
+
       product.categoryId = categoryId;
     }
 
-    // ✅ UPDATE VARIANTS - FIXED FOR NEW STRUCTURE
+    // ═══════════════════════════════════════════════════════════════
+    // ✅ VARIANTS — using new per-variant image map
+    // ═══════════════════════════════════════════════════════════════
     if (variants) {
       try {
-        let variantsArray = typeof variants === 'string' ? JSON.parse(variants) : variants;
-        
-        // Track current image index for sequential distribution
-        let currentImageIndex = 0;
-        
-        // Process each variant for new structure
+        const variantsArray = typeof variants === 'string'
+          ? JSON.parse(variants)
+          : variants;
+
         const processedVariants = variantsArray.map((variant, index) => {
           let variantImages = [];
-          
-          // Handle image distribution
-          if (imageFiles.length > 0) {
-            const imageCount = variant.imageCount || 1;
-            if (imageCount > 0 && imageFiles.length > currentImageIndex) {
-              variantImages = imageFiles
-                .slice(currentImageIndex, currentImageIndex + imageCount)
-                .map(file => getFileUrl(req, path.basename(file.path), 'products'));
-              currentImageIndex += imageCount;
-            }
+
+          // If new files uploaded for this variant index → use them
+          if (variantImageMap[index] && variantImageMap[index].length > 0) {
+            variantImages = variantImageMap[index].map(file =>
+              getFileUrl(req, path.basename(file.path), 'products/images')
+            );
           } else if (variant.images && Array.isArray(variant.images)) {
-            // Keep existing images if no new ones
+            // Otherwise keep existing images from the payload
             variantImages = variant.images;
           }
-          
-          // Process sizes array
+
           let sizesArray = variant.sizes || [];
           if (typeof sizesArray === 'string') {
-            try {
-              sizesArray = JSON.parse(sizesArray);
-            } catch (e) {
-              sizesArray = [];
-            }
+            try { sizesArray = JSON.parse(sizesArray); } catch (e) { sizesArray = []; }
           }
-          
+
           return {
             color: variant.color,
             price: parseFloat(variant.price),
-            discountPrice: variant.discountPrice ? parseFloat(variant.discountPrice) : null,
+            discountPrice: variant.discountPrice
+              ? parseFloat(variant.discountPrice)
+              : null,
             sizes: sizesArray,
             images: variantImages,
+            sku: variant.sku, // preserve existing SKU
             isActive: variant.isActive !== false
           };
         });
-        
+
         product.variants = processedVariants;
-        
+
       } catch (e) {
         console.error('Variants parse error:', e);
         return res.status(400).json({
@@ -1604,22 +2197,24 @@ export const updateProductById = async (req, res) => {
       }
     }
 
-    // Update videos
+    // ═══════════════════════════════════════════════════════════════
+    // ✅ VIDEOS — only if new `product_video` files uploaded
+    // ═══════════════════════════════════════════════════════════════
     if (videoFiles.length > 0) {
-      const newVideoUrls = videoFiles.map(file => 
-        getFileUrl(req, path.basename(file.path), 'products')
+      const newVideoUrls = videoFiles.map(file =>
+        getFileUrl(req, path.basename(file.path), 'products/videos')
       );
-      product.sizeGuide = newVideoUrls;
+      product.productVideos = newVideoUrls;
     }
 
-    // Update tags
+    // ---------- Tags ----------
     if (tags) {
       try {
         product.tags = typeof tags === 'string' ? JSON.parse(tags) : tags;
       } catch (e) {}
     }
 
-    // Reset approval for non-admin updates
+    // ---------- Re-approval for non-admin ----------
     if (userRole !== 'admin' && product.approvalStatus === 'approved') {
       product.approvalStatus = 'pending';
       product.isActive = false;
@@ -1643,6 +2238,7 @@ export const updateProductById = async (req, res) => {
     });
   }
 };
+
 
 // Delete Product By ID
 export const deleteProductById = async (req, res) => {
@@ -1680,14 +2276,15 @@ export const deleteProductById = async (req, res) => {
       });
     }
 
-    // Delete size guide videos
-    if (product.sizeGuide && product.sizeGuide.length) {
-      product.sizeGuide.forEach(video => {
+    // ✅ Delete product videos
+    if (product.productVideos && product.productVideos.length) {
+      product.productVideos.forEach(video => {
         if (!video.startsWith('http')) {
           deleteFile(video);
         }
       });
     }
+
 
     // Soft delete for non-admin, hard delete for admin
     if (userRole === 'admin') {
@@ -5997,10 +6594,10 @@ export const adminDeleteDesignerProduct = async (req, res) => {
         }
       });
     }
-    
-    // Delete size guide videos
-    if (product.sizeGuide && product.sizeGuide.length) {
-      product.sizeGuide.forEach(video => {
+
+    // ✅ Delete product videos
+    if (product.productVideos && product.productVideos.length) {
+      product.productVideos.forEach(video => {
         if (!video.startsWith('http')) {
           deleteFile(video);
         }
