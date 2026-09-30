@@ -705,3 +705,16 @@ export const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: imageFilter
 });
+
+
+
+const categoryStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, "uploads/categories/"),
+  filename: (req, file, cb) =>
+    cb(null, `cat-${Date.now()}${path.extname(file.originalname)}`),
+});
+
+const categoryUpload = multer({ storage: categoryStorage });
+
+// Field name MUST be "image" to match formData.append("image", ...)
+export const uploadCategoryImage = categoryUpload.single("image");

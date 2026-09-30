@@ -1,42 +1,41 @@
-import Admin from '../Models/Admin.js';
-import LoginScreenMedia from '../Models/LoginScreenMedia.js';
-import HomePage from '../Models/HomePage.js';
-import User from '../Models/User.js';
-import { Designer, DesignerSettings } from '../Models/Designer.js';
-import Collection from '../Models/Collection.js';
-import NotificationLabel from '../Models/NotificationLabel.js';
-import Product from '../Models/Product.js';
-import UpcomingCollection from '../Models/UpcomingCollection.js';
-import RecommendedProduct from '../Models/RecommendedProducts.js';
-import LatestDesign from '../Models/LatestDesign.js';
-import StylistBooking from '../Models/StylistBooking.js';
-import Order from '../Models/Order.js';
-import Banner from '../Models/Banner.js';
-import Category from '../Models/Category.js';
-import jwt from 'jsonwebtoken';
-import bcrypt from 'bcrypt';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { getFileUrl, deleteFile } from '../utils/fileUtils.js';
+import Admin from "../Models/Admin.js";
+import LoginScreenMedia from "../Models/LoginScreenMedia.js";
+import HomePage from "../Models/HomePage.js";
+import User from "../Models/User.js";
+import { Designer, DesignerSettings } from "../Models/Designer.js";
+import Collection from "../Models/Collection.js";
+import NotificationLabel from "../Models/NotificationLabel.js";
+import Product from "../Models/Product.js";
+import UpcomingCollection from "../Models/UpcomingCollection.js";
+import RecommendedProduct from "../Models/RecommendedProducts.js";
+import LatestDesign from "../Models/LatestDesign.js";
+import StylistBooking from "../Models/StylistBooking.js";
+import Order from "../Models/Order.js";
+import Banner from "../Models/Banner.js";
+import Category from "../Models/Category.js";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcrypt";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import { getFileUrl, deleteFile } from "../utils/fileUtils.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ✅ Helper to normalize path (fix Windows backslashes)
-const normalizePath = (filePath) => filePath.replace(/\\/g, '/');
+const normalizePath = (filePath) => filePath.replace(/\\/g, "/");
 
 // ✅ Helper to build full image URL
 const getImageUrl = (req, filePath) => {
   const normalized = normalizePath(filePath);
-  return `${req.protocol}://${req.get('host')}/${normalized}`;
+  return `${req.protocol}://${req.get("host")}/${normalized}`;
 };
-
 
 // Permanent admin credentials
 const PERMANENT_ADMIN = {
-  email: 'admin@example.com',
-  password: 'admin123',
-  id: 'admin_permanent_001'
+  email: "admin@example.com",
+  password: "admin123",
+  id: "admin_permanent_001",
 };
 
 // ==================== ADMIN AUTH ====================
@@ -45,122 +44,136 @@ export const adminLogin = async (req, res) => {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ success: false, message: 'Email and password are required' });
+      return res
+        .status(400)
+        .json({ success: false, message: "Email and password are required" });
     }
 
     let adminData = null;
     let isPermanent = false;
 
     // Check for permanent admin credentials
-    if (email === PERMANENT_ADMIN.email && password === PERMANENT_ADMIN.password) {
-      console.log('✅ Permanent admin login - checking database...');
-      
+    if (
+      email === PERMANENT_ADMIN.email &&
+      password === PERMANENT_ADMIN.password
+    ) {
+      console.log("✅ Permanent admin login - checking database...");
+
       // ✅ Find or create admin in database
       let admin = await Admin.findOne({ email: PERMANENT_ADMIN.email });
-      
+
       if (!admin) {
         // Create the permanent admin in database
         const hashedPassword = await bcrypt.hash(PERMANENT_ADMIN.password, 10);
         admin = await Admin.create({
           email: PERMANENT_ADMIN.email,
           password: hashedPassword,
-          role: 'super_admin',
-          name: 'Super Admin',
-          isActive: true
+          role: "super_admin",
+          name: "Super Admin",
+          isActive: true,
         });
-        console.log('✅ Created permanent admin in database with ID:', admin._id);
+        console.log(
+          "✅ Created permanent admin in database with ID:",
+          admin._id,
+        );
       }
-      
+
       adminData = {
-        id: admin._id,  // ✅ Real MongoDB ObjectId
+        id: admin._id, // ✅ Real MongoDB ObjectId
         email: admin.email,
         role: admin.role,
-        name: admin.name
+        name: admin.name,
       };
       isPermanent = true;
     } else {
       // Check database for other admins
       const admin = await Admin.findOne({ email });
       if (!admin) {
-        return res.status(401).json({ success: false, message: 'Invalid credentials' });
+        return res
+          .status(401)
+          .json({ success: false, message: "Invalid credentials" });
       }
 
       const isPasswordValid = await bcrypt.compare(password, admin.password);
       if (!isPasswordValid) {
-        return res.status(401).json({ success: false, message: 'Invalid credentials' });
+        return res
+          .status(401)
+          .json({ success: false, message: "Invalid credentials" });
       }
 
       adminData = {
         id: admin._id,
         email: admin.email,
-        role: admin.role || 'admin',
-        name: admin.name || 'Admin'
+        role: admin.role || "admin",
+        name: admin.name || "Admin",
       };
     }
 
-    const secret = process.env.JWT_SECRET_KEY ;
+    const secret = process.env.JWT_SECRET_KEY;
 
     if (!secret) {
-      console.error('❌ JWT_SECRET is not defined in environment variables!');
+      console.error("❌ JWT_SECRET is not defined in environment variables!");
       return res.status(500).json({
         success: false,
-        message: 'Server configuration error'
+        message: "Server configuration error",
       });
     }
 
-    console.log('Login using secret:', secret);
+    console.log("Login using secret:", secret);
 
     const token = jwt.sign(
-      { 
+      {
         id: adminData.id.toString(),
         email: adminData.email,
-        role: adminData.role || 'admin',
-        name: adminData.name || 'Admin'
+        role: adminData.role || "admin",
+        name: adminData.name || "Admin",
       },
-      secret,  // Use the same secret variable
-      { expiresIn: '7d' }
+      secret, // Use the same secret variable
+      { expiresIn: "7d" },
     );
-    console.log('Generated token:', token);
-    
+    console.log("Generated token:", token);
+
     return res.status(200).json({
       success: true,
-      message: 'Admin login successful',
+      message: "Admin login successful",
       token,
       admin: {
-        id: adminData.id,  // ✅ Returns real ObjectId
+        id: adminData.id, // ✅ Returns real ObjectId
         email: adminData.email,
         role: adminData.role,
         name: adminData.name,
-        isPermanent: isPermanent
-      }
+        isPermanent: isPermanent,
+      },
     });
-
   } catch (error) {
-    console.error('adminLogin error:', error);
-    return res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error("adminLogin error:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
   }
 };
 export const updatePermanentAdmin = async (req, res) => {
   try {
     const { email, password } = req.body;
-    
+
     if (email) PERMANENT_ADMIN.email = email;
     if (password) PERMANENT_ADMIN.password = password;
-    
+
     return res.status(200).json({
       success: true,
-      message: 'Permanent admin credentials updated',
+      message: "Permanent admin credentials updated",
       admin: {
         email: PERMANENT_ADMIN.email,
-        isPermanent: true
-      }
+        isPermanent: true,
+      },
     });
   } catch (error) {
-    console.error('updatePermanentAdmin error:', error);
-    return res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error("updatePermanentAdmin error:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
   }
 };
-
 
 // ==================== USER MANAGEMENT ====================
 export const getAllUsers = async (req, res) => {
@@ -168,11 +181,13 @@ export const getAllUsers = async (req, res) => {
     const { role } = req.query;
     let query = {};
 
-    if (role && ['Tailor', 'Designer', 'User', 'Stylist'].includes(role)) {
+    if (role && ["Tailor", "Designer", "User", "Stylist"].includes(role)) {
       query.role = role;
     }
 
-    const users = await User.find(query).select('-otp -otpExpires -authToken -authTokenExpires');
+    const users = await User.find(query).select(
+      "-otp -otpExpires -authToken -authTokenExpires",
+    );
 
     return res.status(200).json({
       success: true,
@@ -180,8 +195,10 @@ export const getAllUsers = async (req, res) => {
       users,
     });
   } catch (error) {
-    console.error('getAllUsers error:', error);
-    return res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error("getAllUsers error:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
   }
 };
 
@@ -189,16 +206,22 @@ export const getUserById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const user = await User.findById(id).select('-otp -otpExpires -authToken -authTokenExpires');
+    const user = await User.findById(id).select(
+      "-otp -otpExpires -authToken -authTokenExpires",
+    );
 
     if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
 
     return res.status(200).json({ success: true, user });
   } catch (error) {
-    console.error('getUserById error:', error);
-    return res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error("getUserById error:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
   }
 };
 
@@ -209,27 +232,34 @@ export const updateUserById = async (req, res) => {
 
     const user = await User.findById(id);
     if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
 
     if (name) user.name = name;
     if (email) user.email = email;
     if (mobile) user.mobile = mobile;
-    if (role && ['Tailor', 'Designer', 'User', 'Stylist'].includes(role)) user.role = role;
-    if (typeof isVerified === 'boolean') user.isVerified = isVerified;
+    if (role && ["Tailor", "Designer", "User", "Stylist"].includes(role))
+      user.role = role;
+    if (typeof isVerified === "boolean") user.isVerified = isVerified;
 
     await user.save();
 
-    const updatedUser = await User.findById(id).select('-otp -otpExpires -authToken -authTokenExpires');
+    const updatedUser = await User.findById(id).select(
+      "-otp -otpExpires -authToken -authTokenExpires",
+    );
 
     return res.status(200).json({
       success: true,
-      message: 'User updated successfully',
+      message: "User updated successfully",
       user: updatedUser,
     });
   } catch (error) {
-    console.error('updateUserById error:', error);
-    return res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error("updateUserById error:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
   }
 };
 
@@ -239,45 +269,51 @@ export const deleteUserById = async (req, res) => {
 
     const user = await User.findByIdAndDelete(id);
     if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
     }
 
-    return res.status(200).json({ success: true, message: 'User deleted successfully' });
+    return res
+      .status(200)
+      .json({ success: true, message: "User deleted successfully" });
   } catch (error) {
-    console.error('deleteUserById error:', error);
-    return res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error("deleteUserById error:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
   }
 };
 
 // ==================== BANNER MANAGEMENT ====================
 export const createBanners = async (req, res) => {
   try {
-    console.log('=== CREATE BANNERS DEBUG ===');
-    console.log('Files received:', req.files);
-    console.log('Body received:', req.body);
-    console.log('Number of files:', req.files?.length);
-    
+    console.log("=== CREATE BANNERS DEBUG ===");
+    console.log("Files received:", req.files);
+    console.log("Body received:", req.body);
+    console.log("Number of files:", req.files?.length);
+
     const files = req.files;
     const { isActive } = req.body;
-    
+
     if (!files || files.length === 0) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'At least one banner image is required',
+      return res.status(400).json({
+        success: false,
+        message: "At least one banner image is required",
         receivedFiles: files,
-        receivedBody: req.body
+        receivedBody: req.body,
       });
     }
-    
+
     const banners = [];
-    
+
     for (let i = 0; i < files.length; i++) {
       console.log(`Processing file ${i}:`, files[i].path);
-      
+
       // Extract filename from the path
       const filename = path.basename(files[i].path);
-      const imageUrl = getFileUrl(req, filename, 'banners');
-      
+      const imageUrl = getFileUrl(req, filename, "banners");
+
       const banner = new Banner({
         image: imageUrl, // Store the full URL instead of file path
         isActive: isActive !== undefined ? isActive : true,
@@ -285,18 +321,18 @@ export const createBanners = async (req, res) => {
       await banner.save();
       banners.push(banner);
     }
-    
+
     return res.status(201).json({
       success: true,
       message: `${banners.length} banner(s) created successfully`,
       banners,
     });
   } catch (error) {
-    console.error('createBanners error:', error);
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Internal server error',
-      error: error.message 
+    console.error("createBanners error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
     });
   }
 };
@@ -304,52 +340,58 @@ export const createBanners = async (req, res) => {
 export const getAllBanners = async (req, res) => {
   try {
     const banners = await Banner.find().sort({ createdAt: -1 });
-    
+
     // Transform banners to ensure URLs are complete
-    const bannersWithUrls = banners.map(banner => {
+    const bannersWithUrls = banners.map((banner) => {
       const bannerObj = banner.toObject();
       // If image is already a URL, leave it; if it's a path, convert it
-      if (bannerObj.image && !bannerObj.image.startsWith('http')) {
+      if (bannerObj.image && !bannerObj.image.startsWith("http")) {
         const filename = path.basename(bannerObj.image);
-        bannerObj.image = getFileUrl(req, filename, 'banners');
+        bannerObj.image = getFileUrl(req, filename, "banners");
       }
       return bannerObj;
     });
-    
+
     return res.status(200).json({
       success: true,
       count: bannersWithUrls.length,
       banners: bannersWithUrls,
     });
   } catch (error) {
-    console.error('getAllBanners error:', error);
-    return res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error("getAllBanners error:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
   }
 };
 
 export const getBannerById = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const banner = await Banner.findById(id);
     if (!banner) {
-      return res.status(404).json({ success: false, message: 'Banner not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Banner not found" });
     }
-    
+
     // Convert image path to URL
     const bannerObj = banner.toObject();
-    if (bannerObj.image && !bannerObj.image.startsWith('http')) {
+    if (bannerObj.image && !bannerObj.image.startsWith("http")) {
       const filename = path.basename(bannerObj.image);
-      bannerObj.image = getFileUrl(req, filename, 'banners');
+      bannerObj.image = getFileUrl(req, filename, "banners");
     }
-    
+
     return res.status(200).json({
       success: true,
       banner: bannerObj,
     });
   } catch (error) {
-    console.error('getBannerById error:', error);
-    return res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error("getBannerById error:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
   }
 };
 
@@ -358,71 +400,79 @@ export const updateBannerById = async (req, res) => {
     const { id } = req.params;
     const { isActive } = req.body;
     const file = req.file;
-    
+
     const banner = await Banner.findById(id);
     if (!banner) {
       if (file) deleteFile(file.path);
-      return res.status(404).json({ success: false, message: 'Banner not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Banner not found" });
     }
-    
+
     // Only update isActive if provided
     if (isActive !== undefined) {
       banner.isActive = isActive;
     }
-    
+
     // Only update image if a new file is uploaded
     if (file) {
       // Delete old image file if it's a local path
-      if (banner.image && !banner.image.startsWith('http')) {
+      if (banner.image && !banner.image.startsWith("http")) {
         deleteFile(banner.image);
       }
-      
+
       // Store the full URL
       const filename = path.basename(file.path);
-      banner.image = getFileUrl(req, filename, 'banners');
+      banner.image = getFileUrl(req, filename, "banners");
     }
-    
+
     await banner.save();
-    
+
     // Return the updated banner with URL
     const bannerObj = banner.toObject();
-    if (bannerObj.image && !bannerObj.image.startsWith('http')) {
+    if (bannerObj.image && !bannerObj.image.startsWith("http")) {
       const filename = path.basename(bannerObj.image);
-      bannerObj.image = getFileUrl(req, filename, 'banners');
+      bannerObj.image = getFileUrl(req, filename, "banners");
     }
-    
+
     return res.status(200).json({
       success: true,
-      message: 'Banner updated successfully',
+      message: "Banner updated successfully",
       banner: bannerObj,
     });
   } catch (error) {
-    console.error('updateBannerById error:', error);
-    return res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error("updateBannerById error:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
   }
 };
 
 export const deleteBannerById = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const banner = await Banner.findByIdAndDelete(id);
     if (!banner) {
-      return res.status(404).json({ success: false, message: 'Banner not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Banner not found" });
     }
-    
+
     // Delete the image file if it's a local path (not a URL)
-    if (banner.image && !banner.image.startsWith('http')) {
+    if (banner.image && !banner.image.startsWith("http")) {
       deleteFile(banner.image);
     }
-    
+
     return res.status(200).json({
       success: true,
-      message: 'Banner deleted successfully',
+      message: "Banner deleted successfully",
     });
   } catch (error) {
-    console.error('deleteBannerById error:', error);
-    return res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error("deleteBannerById error:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
   }
 };
 // controllers/AdminController.js (add these functions)
@@ -436,65 +486,82 @@ export const createSubcategory = async (req, res) => {
     const { name } = req.body;
     const file = req.file;
 
-    // Validate inputs
-    if (!name) {
+    if (!name || !name.trim()) {
       if (file) deleteFile(file.path);
-      return res.status(400).json({ success: false, message: 'Subcategory name is required' });
-    }
 
-    if (!file) {
-      return res.status(400).json({ success: false, message: 'Subcategory image is required' });
-    }
-
-    // Find the category
-    const category = await Category.findById(categoryId);
-    if (!category) {
-      if (file) deleteFile(file.path);
-      return res.status(404).json({ success: false, message: 'Category not found' });
-    }
-
-    // Check if subcategory with same name exists in this category
-    const existingSubcategory = category.subcategories.find(
-      sub => sub.name.toLowerCase() === name.toLowerCase()
-    );
-    
-    if (existingSubcategory) {
-      deleteFile(file.path);
-      return res.status(409).json({ 
-        success: false, 
-        message: 'Subcategory with this name already exists in this category' 
+      return res.status(400).json({
+        success: false,
+        message: "Subcategory name is required",
       });
     }
 
-    // Save the image
-    const filename = path.basename(file.path);
-    const imageUrl = getFileUrl(req, filename, 'subcategories');
+    if (!file) {
+      return res.status(400).json({
+        success: false,
+        message: "Subcategory image is required",
+      });
+    }
 
-    // Create new subcategory
+    const category = await Category.findById(categoryId);
+
+    if (!category) {
+      deleteFile(file.path);
+
+      return res.status(404).json({
+        success: false,
+        message: "Category not found",
+      });
+    }
+
+    const existingSubcategory = category.subcategories.find(
+      (sub) => sub.name.toLowerCase() === name.trim().toLowerCase(),
+    );
+
+    if (existingSubcategory) {
+      deleteFile(file.path);
+
+      return res.status(409).json({
+        success: false,
+        message: "Subcategory with this name already exists in this category",
+      });
+    }
+
+    const filename = path.basename(file.path);
+
+    const imageUrl = getFileUrl(req, filename, "subcategories");
+
     const newSubcategory = {
-      name,
+      name: name.trim(),
       image: imageUrl,
       isActive: true,
     };
 
     category.subcategories.push(newSubcategory);
+
     await category.save();
 
-    // Get the newly created subcategory
-    const savedSubcategory = category.subcategories[category.subcategories.length - 1];
+    const savedSubcategory =
+      category.subcategories[category.subcategories.length - 1];
 
     return res.status(201).json({
       success: true,
-      message: 'Subcategory created successfully',
+      message: "Subcategory created successfully",
       subcategory: savedSubcategory,
       category: {
         id: category._id,
-        name: category.name
-      }
+        name: category.name,
+        image: category.image,
+        isActive: category.isActive,
+      },
     });
   } catch (error) {
-    console.error('createSubcategory error:', error);
-    return res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error("createSubcategory error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
   }
 };
 
@@ -505,15 +572,17 @@ export const getSubcategoriesByCategory = async (req, res) => {
 
     const category = await Category.findById(categoryId);
     if (!category) {
-      return res.status(404).json({ success: false, message: 'Category not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Category not found" });
     }
 
     // Ensure all subcategory images have full URLs
-    const subcategoriesWithUrls = category.subcategories.map(sub => {
+    const subcategoriesWithUrls = category.subcategories.map((sub) => {
       const subObj = sub.toObject();
-      if (subObj.image && !subObj.image.startsWith('http')) {
+      if (subObj.image && !subObj.image.startsWith("http")) {
         const filename = path.basename(subObj.image);
-        subObj.image = getFileUrl(req, filename, 'subcategories');
+        subObj.image = getFileUrl(req, filename, "subcategories");
       }
       return subObj;
     });
@@ -523,13 +592,15 @@ export const getSubcategoriesByCategory = async (req, res) => {
       count: subcategoriesWithUrls.length,
       category: {
         id: category._id,
-        name: category.name
+        name: category.name,
       },
       subcategories: subcategoriesWithUrls,
     });
   } catch (error) {
-    console.error('getSubcategoriesByCategory error:', error);
-    return res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error("getSubcategoriesByCategory error:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
   }
 };
 
@@ -540,19 +611,23 @@ export const getSubcategoryById = async (req, res) => {
 
     const category = await Category.findById(categoryId);
     if (!category) {
-      return res.status(404).json({ success: false, message: 'Category not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Category not found" });
     }
 
     const subcategory = category.subcategories.id(subcategoryId);
     if (!subcategory) {
-      return res.status(404).json({ success: false, message: 'Subcategory not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Subcategory not found" });
     }
 
     // Convert image path to URL
     const subObj = subcategory.toObject();
-    if (subObj.image && !subObj.image.startsWith('http')) {
+    if (subObj.image && !subObj.image.startsWith("http")) {
       const filename = path.basename(subObj.image);
-      subObj.image = getFileUrl(req, filename, 'subcategories');
+      subObj.image = getFileUrl(req, filename, "subcategories");
     }
 
     return res.status(200).json({
@@ -560,12 +635,14 @@ export const getSubcategoryById = async (req, res) => {
       subcategory: subObj,
       category: {
         id: category._id,
-        name: category.name
-      }
+        name: category.name,
+      },
     });
   } catch (error) {
-    console.error('getSubcategoryById error:', error);
-    return res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error("getSubcategoryById error:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
   }
 };
 
@@ -579,70 +656,77 @@ export const updateSubcategoryById = async (req, res) => {
     const category = await Category.findById(categoryId);
     if (!category) {
       if (file) deleteFile(file.path);
-      return res.status(404).json({ success: false, message: 'Category not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Category not found" });
     }
 
     const subcategory = category.subcategories.id(subcategoryId);
     if (!subcategory) {
       if (file) deleteFile(file.path);
-      return res.status(404).json({ success: false, message: 'Subcategory not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Subcategory not found" });
     }
 
     // Update name if provided and check for duplicates
     if (name && name !== subcategory.name) {
       const existingSubcategory = category.subcategories.find(
-        sub => sub.name.toLowerCase() === name.toLowerCase() && 
-        sub._id.toString() !== subcategoryId
+        (sub) =>
+          sub.name.toLowerCase() === name.toLowerCase() &&
+          sub._id.toString() !== subcategoryId,
       );
-      
+
       if (existingSubcategory) {
         if (file) deleteFile(file.path);
-        return res.status(409).json({ 
-          success: false, 
-          message: 'Subcategory with this name already exists in this category' 
+        return res.status(409).json({
+          success: false,
+          message: "Subcategory with this name already exists in this category",
         });
       }
       subcategory.name = name;
     }
 
     // Update isActive if provided
-    if (typeof isActive === 'boolean') {
+    if (typeof isActive === "boolean") {
       subcategory.isActive = isActive;
     }
 
     // Update image if a new file is uploaded
     if (file) {
       // Delete old image file if it's a local path
-      if (subcategory.image && !subcategory.image.startsWith('http')) {
+      if (subcategory.image && !subcategory.image.startsWith("http")) {
         deleteFile(subcategory.image);
       }
-      
+
       // Store the full URL
       const filename = path.basename(file.path);
-      subcategory.image = getFileUrl(req, filename, 'subcategories');
+      subcategory.image = getFileUrl(req, filename, "subcategories");
     }
 
     await category.save();
 
     // Return the updated subcategory with URL
     const subObj = subcategory.toObject();
-    if (subObj.image && !subObj.image.startsWith('http')) {
+    if (subObj.image && !subObj.image.startsWith("http")) {
       const filename = path.basename(subObj.image);
-      subObj.image = getFileUrl(req, filename, 'subcategories');
+      subObj.image = getFileUrl(req, filename, "subcategories");
     }
 
     return res.status(200).json({
       success: true,
-      message: 'Subcategory updated successfully',
+      message: "Subcategory updated successfully",
       subcategory: subObj,
       category: {
         id: category._id,
-        name: category.name
-      }
+        name: category.name,
+      },
     });
   } catch (error) {
-    console.error('updateSubcategoryById error:', error);
-    return res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error("updateSubcategoryById error:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
   }
 };
 
@@ -653,16 +737,20 @@ export const deleteSubcategoryById = async (req, res) => {
 
     const category = await Category.findById(categoryId);
     if (!category) {
-      return res.status(404).json({ success: false, message: 'Category not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Category not found" });
     }
 
     const subcategory = category.subcategories.id(subcategoryId);
     if (!subcategory) {
-      return res.status(404).json({ success: false, message: 'Subcategory not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Subcategory not found" });
     }
 
     // Delete the image file if it's a local path (not a URL)
-    if (subcategory.image && !subcategory.image.startsWith('http')) {
+    if (subcategory.image && !subcategory.image.startsWith("http")) {
       deleteFile(subcategory.image);
     }
 
@@ -672,11 +760,13 @@ export const deleteSubcategoryById = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Subcategory deleted successfully',
+      message: "Subcategory deleted successfully",
     });
   } catch (error) {
-    console.error('deleteSubcategoryById error:', error);
-    return res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error("deleteSubcategoryById error:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
   }
 };
 
@@ -684,32 +774,34 @@ export const deleteSubcategoryById = async (req, res) => {
 export const getAllCategories = async (req, res) => {
   try {
     const categories = await Category.find().sort({ createdAt: -1 });
-    
-    const categoriesWithUrls = categories.map(category => {
+
+    const categoriesWithUrls = categories.map((category) => {
       const categoryObj = category.toObject();
-      
+
       // Process subcategories to ensure image URLs
       if (categoryObj.subcategories && categoryObj.subcategories.length > 0) {
-        categoryObj.subcategories = categoryObj.subcategories.map(sub => {
-          if (sub.image && !sub.image.startsWith('http')) {
+        categoryObj.subcategories = categoryObj.subcategories.map((sub) => {
+          if (sub.image && !sub.image.startsWith("http")) {
             const filename = path.basename(sub.image);
-            sub.image = getFileUrl(req, filename, 'subcategories');
+            sub.image = getFileUrl(req, filename, "subcategories");
           }
           return sub;
         });
       }
-      
+
       return categoryObj;
     });
-    
+
     return res.status(200).json({
       success: true,
       count: categoriesWithUrls.length,
       categories: categoriesWithUrls,
     });
   } catch (error) {
-    console.error('getAllCategories error:', error);
-    return res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error("getAllCategories error:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
   }
 };
 
@@ -717,97 +809,141 @@ export const getAllCategories = async (req, res) => {
 export const getCategoryById = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const category = await Category.findById(id);
     if (!category) {
-      return res.status(404).json({ success: false, message: 'Category not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Category not found" });
     }
-    
+
     // Convert image paths to URLs for subcategories
     const categoryObj = category.toObject();
-    
+
     if (categoryObj.subcategories && categoryObj.subcategories.length > 0) {
-      categoryObj.subcategories = categoryObj.subcategories.map(sub => {
-        if (sub.image && !sub.image.startsWith('http')) {
+      categoryObj.subcategories = categoryObj.subcategories.map((sub) => {
+        if (sub.image && !sub.image.startsWith("http")) {
           const filename = path.basename(sub.image);
-          sub.image = getFileUrl(req, filename, 'subcategories');
+          sub.image = getFileUrl(req, filename, "subcategories");
         }
         return sub;
       });
     }
-    
+
     return res.status(200).json({
       success: true,
       category: categoryObj,
     });
   } catch (error) {
-    console.error('getCategoryById error:', error);
-    return res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error("getCategoryById error:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
   }
 };
 
 // Update category (remove image requirement since categories don't have images)
 export const createCategory = async (req, res) => {
   try {
-    const { name } = req.body;
-    
-    if (!name) {
-      return res.status(400).json({ success: false, message: 'Category name is required' });
+    const { name, isActive } = req.body;
+    const file = req.file;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Category name is required",
+      });
     }
-    
-    const existingCategory = await Category.findOne({ name });
+
+    if (!file) {
+      return res.status(400).json({
+        success: false,
+        message: "Category image is required",
+      });
+    }
+
+    const existingCategory = await Category.findOne({
+      name: name.trim(),
+    });
+
     if (existingCategory) {
-      return res.status(409).json({ success: false, message: 'Category with this name already exists' });
+      return res.status(409).json({
+        success: false,
+        message: "Category with this name already exists",
+      });
     }
-    
+
+    const imagePath = `/uploads/categories/${file.filename}`;
+
     const category = new Category({
-      name,
+      name: name.trim(),
+      image: imagePath,
+      isActive:
+        isActive === undefined
+          ? true
+          : isActive === "true" || isActive === true,
       subcategories: [],
     });
-    
+
     await category.save();
-    
+
     return res.status(201).json({
       success: true,
-      message: 'Category created successfully',
+      message: "Category created successfully",
       category,
     });
   } catch (error) {
-    console.error('createCategory error:', error);
-    return res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error("createCategory error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
   }
 };
-
 // Update category (remove image handling)
 export const updateCategoryById = async (req, res) => {
   try {
     const { id } = req.params;
     const { name } = req.body;
-    
+
     const category = await Category.findById(id);
     if (!category) {
-      return res.status(404).json({ success: false, message: 'Category not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Category not found" });
     }
-    
+
     // Update name if provided and not duplicate
     if (name && name !== category.name) {
-      const existingCategory = await Category.findOne({ name, _id: { $ne: id } });
+      const existingCategory = await Category.findOne({
+        name,
+        _id: { $ne: id },
+      });
       if (existingCategory) {
-        return res.status(409).json({ success: false, message: 'Category with this name already exists' });
+        return res
+          .status(409)
+          .json({
+            success: false,
+            message: "Category with this name already exists",
+          });
       }
       category.name = name;
     }
-    
+
     await category.save();
-    
+
     return res.status(200).json({
       success: true,
-      message: 'Category updated successfully',
+      message: "Category updated successfully",
       category,
     });
   } catch (error) {
-    console.error('updateCategoryById error:', error);
-    return res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error("updateCategoryById error:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
   }
 };
 
@@ -815,36 +951,39 @@ export const updateCategoryById = async (req, res) => {
 export const deleteCategoryById = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const category = await Category.findById(id);
     if (!category) {
-      return res.status(404).json({ success: false, message: 'Category not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Category not found" });
     }
-    
+
     // Delete all subcategory images
     for (const subcategory of category.subcategories) {
-      if (subcategory.image && !subcategory.image.startsWith('http')) {
+      if (subcategory.image && !subcategory.image.startsWith("http")) {
         deleteFile(subcategory.image);
       }
     }
-    
+
     await Category.findByIdAndDelete(id);
-    
+
     return res.status(200).json({
       success: true,
-      message: 'Category and all its subcategories deleted successfully',
+      message: "Category and all its subcategories deleted successfully",
     });
   } catch (error) {
-    console.error('deleteCategoryById error:', error);
-    return res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error("deleteCategoryById error:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
   }
 };
-
 
 // Helper to extract file URLs from multer upload
 const getUploadedFileUrls = (files, req, folder) => {
   if (!files || files.length === 0) return [];
-  return files.map(file => {
+  return files.map((file) => {
     const filename = path.basename(file.path);
     return getFileUrl(req, filename, folder);
   });
@@ -853,13 +992,12 @@ const getUploadedFileUrls = (files, req, folder) => {
 // Helper to delete multiple files
 const deleteProductFiles = (filePaths) => {
   if (!filePaths || filePaths.length === 0) return;
-  filePaths.forEach(filePath => {
-    if (filePath && !filePath.startsWith('http')) {
+  filePaths.forEach((filePath) => {
+    if (filePath && !filePath.startsWith("http")) {
       deleteFile(filePath);
     }
   });
 };
-
 
 // Controller/adminController.js - Updated createProduct for new structure
 // export const createProduct = async (req, res) => {
@@ -927,7 +1065,7 @@ const deleteProductFiles = (filePaths) => {
 //     // Group images by variant field name
 //     const variantImageMap = {};
 //     const videoFiles = [];
-    
+
 //     if (req.files && Array.isArray(req.files)) {
 //       req.files.forEach(file => {
 //         if (file.mimetype.startsWith('image/')) {
@@ -951,9 +1089,9 @@ const deleteProductFiles = (filePaths) => {
 //     // Process variants
 //     const processedVariants = variantsArray.map((variant, index) => {
 //       let variantImages = [];
-      
+
 //       if (variantImageMap[index] && variantImageMap[index].length > 0) {
-//         variantImages = variantImageMap[index].map(file => 
+//         variantImages = variantImageMap[index].map(file =>
 //           getFileUrl(req, path.basename(file.path), 'products')
 //         );
 //       }
@@ -977,12 +1115,11 @@ const deleteProductFiles = (filePaths) => {
 //       };
 //     });
 
-//     const videoUrls = videoFiles.map(file => 
+//     const videoUrls = videoFiles.map(file =>
 //       getFileUrl(req, path.basename(file.path), 'products')
 //     );
 
 //     let addressesArray = [];
-    
 
 //     let tagsArray = [];
 //     if (tags) {
@@ -1044,61 +1181,79 @@ export const createProduct = async (req, res) => {
     if (!userId || !userRole) {
       return res.status(401).json({
         success: false,
-        message: 'Authentication required. Please login.'
+        message: "Authentication required. Please login.",
       });
     }
 
     const {
-      name, description, shortDescription,
-      categoryId, subcategoryId,
-      variants, tags, brand, gender, exclusiveProduct,
-      specifications, shipping, deliveryOptions, additionalSettings
+      name,
+      description,
+      shortDescription,
+      categoryId,
+      subcategoryId,
+      variants,
+      tags,
+      brand,
+      gender,
+      exclusiveProduct,
+      specifications,
+      shipping,
+      deliveryOptions,
+      additionalSettings,
     } = req.body;
 
-    if (!['admin', 'designer', 'tailor', 'Stylist'].includes(userRole)) {
+    if (!["admin", "designer", "tailor", "Stylist"].includes(userRole)) {
       return res.status(403).json({
         success: false,
-        message: 'Only Admin, Designer, Tailor, or Stylist can create products'
+        message: "Only Admin, Designer, Tailor, or Stylist can create products",
       });
     }
 
     if (!name || !description || !categoryId || !subcategoryId) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields: name, description, categoryId, subcategoryId'
+        message:
+          "Missing required fields: name, description, categoryId, subcategoryId",
       });
     }
 
     // Parse variants
     let variantsArray = [];
     try {
-      variantsArray = typeof variants === 'string' ? JSON.parse(variants) : variants;
-    } catch (e) { variantsArray = []; }
+      variantsArray =
+        typeof variants === "string" ? JSON.parse(variants) : variants;
+    } catch (e) {
+      variantsArray = [];
+    }
 
     if (!variantsArray.length) {
       return res.status(400).json({
         success: false,
-        message: 'At least one color variant is required'
+        message: "At least one color variant is required",
       });
     }
 
     // Validate category
     const category = await Category.findById(categoryId);
     if (!category) {
-      return res.status(404).json({ success: false, message: 'Category not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Category not found" });
     }
     const subcategory = category.subcategories.id(subcategoryId);
     if (!subcategory) {
-      return res.status(404).json({ success: false, message: 'Subcategory not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Subcategory not found" });
     }
 
     // ---------- Process files ----------
-    const variantImageMap = {};   // { variantIndex: [files] }
-    const videoFiles = [];        // all video files
+    const variantImageMap = {}; // { variantIndex: [files] }
+    const videoFiles = []; // all video files
 
     if (req.files && Array.isArray(req.files)) {
-      req.files.forEach(file => {
-        if (file.mimetype.startsWith('image/')) {
+      req.files.forEach((file) => {
+        if (file.mimetype.startsWith("image/")) {
           // Must be variant_<N>_images (already validated by multer, but parse anyway)
           const match = file.fieldname.match(/^variant_(\d+)_images$/);
           if (match) {
@@ -1106,65 +1261,88 @@ export const createProduct = async (req, res) => {
             if (!variantImageMap[idx]) variantImageMap[idx] = [];
             variantImageMap[idx].push(file);
           }
-        } else if (file.mimetype.startsWith('video/')) {
+        } else if (file.mimetype.startsWith("video/")) {
           // Only accept `product_video` fieldname (multer already enforced)
-          if (file.fieldname === 'product_video') {
+          if (file.fieldname === "product_video") {
             videoFiles.push(file);
           }
         }
       });
     }
 
-    console.log('📸 Variant images:', Object.keys(variantImageMap)
-      .map(k => `${k}: ${variantImageMap[k].length}`).join(', '));
-    console.log('🎥 Video files:', videoFiles.length);
+    console.log(
+      "📸 Variant images:",
+      Object.keys(variantImageMap)
+        .map((k) => `${k}: ${variantImageMap[k].length}`)
+        .join(", "),
+    );
+    console.log("🎥 Video files:", videoFiles.length);
 
     // Build variants
     const processedVariants = variantsArray.map((variant, index) => {
       let variantImages = [];
 
       if (variantImageMap[index] && variantImageMap[index].length > 0) {
-        variantImages = variantImageMap[index].map(file =>
-          getFileUrl(req, path.basename(file.path), file.mimetype.startsWith('video/') ? 'products/videos' : 'products/images')
+        variantImages = variantImageMap[index].map((file) =>
+          getFileUrl(
+            req,
+            path.basename(file.path),
+            file.mimetype.startsWith("video/")
+              ? "products/videos"
+              : "products/images",
+          ),
         );
       }
 
       let sizesArray = variant.sizes || [];
-      if (typeof sizesArray === 'string') {
-        try { sizesArray = JSON.parse(sizesArray); } catch (e) { sizesArray = []; }
+      if (typeof sizesArray === "string") {
+        try {
+          sizesArray = JSON.parse(sizesArray);
+        } catch (e) {
+          sizesArray = [];
+        }
       }
 
       return {
         color: variant.color,
         price: parseFloat(variant.price),
-        discountPrice: variant.discountPrice ? parseFloat(variant.discountPrice) : null,
+        discountPrice: variant.discountPrice
+          ? parseFloat(variant.discountPrice)
+          : null,
         sizes: sizesArray,
         images: variantImages,
-        isActive: true
+        isActive: true,
       };
     });
 
     // Build video URLs
-    const videoUrls = videoFiles.map(file =>
-      getFileUrl(req, path.basename(file.path), 'products/videos')
+    const videoUrls = videoFiles.map((file) =>
+      getFileUrl(req, path.basename(file.path), "products/videos"),
     );
 
     // Parse tags, flags, nested objects
     let tagsArray = [];
     if (tags) {
-      try { tagsArray = typeof tags === 'string' ? JSON.parse(tags) : tags; } catch (e) {}
+      try {
+        tagsArray = typeof tags === "string" ? JSON.parse(tags) : tags;
+      } catch (e) {}
     }
 
     let isExclusive = false;
     if (exclusiveProduct !== undefined) {
-      isExclusive = typeof exclusiveProduct === 'boolean'
-        ? exclusiveProduct
-        : exclusiveProduct === 'true' || exclusiveProduct === '1';
+      isExclusive =
+        typeof exclusiveProduct === "boolean"
+          ? exclusiveProduct
+          : exclusiveProduct === "true" || exclusiveProduct === "1";
     }
 
     const parseJSON = (val) => {
       if (!val) return null;
-      try { return typeof val === 'string' ? JSON.parse(val) : val; } catch (e) { return null; }
+      try {
+        return typeof val === "string" ? JSON.parse(val) : val;
+      } catch (e) {
+        return null;
+      }
     };
 
     const specsObj = parseJSON(specifications) || {};
@@ -1174,15 +1352,15 @@ export const createProduct = async (req, res) => {
 
     // Creator details
     let creatorDetails = null;
-    if (userRole !== 'admin') {
+    if (userRole !== "admin") {
       const user = await User.findById(userId);
       if (user) {
         creatorDetails = {
           name: user.name,
-          profileImage: user.profileImage || '',
+          profileImage: user.profileImage || "",
           role: userRole,
-          brandName: userRole === 'designer' ? user.name : undefined,
-          shopName: userRole === 'tailor' ? user.name : undefined
+          brandName: userRole === "designer" ? user.name : undefined,
+          shopName: userRole === "tailor" ? user.name : undefined,
         };
       }
     }
@@ -1191,25 +1369,29 @@ export const createProduct = async (req, res) => {
     const productPayload = {
       name,
       description,
-      shortDescription: shortDescription || '',
+      shortDescription: shortDescription || "",
       categoryId,
       subcategoryId,
       subcategoryName: subcategory.name,
-      brand: brand || '',
-      gender: gender || 'Unisex',
+      brand: brand || "",
+      gender: gender || "Unisex",
       exclusiveProduct: isExclusive,
       specifications: specsObj,
       shipping: shippingObj,
       deliveryOptions: deliveryObj,
       variants: processedVariants,
-      productVideos: videoUrls,   // ✅ videos here
+      productVideos: videoUrls, // ✅ videos here
       tags: tagsArray,
       createdBy: userRole,
       creatorId: userId,
-      creatorDetails
+      creatorDetails,
     };
 
-    if (settingsArray && Array.isArray(settingsArray) && settingsArray.length > 0) {
+    if (
+      settingsArray &&
+      Array.isArray(settingsArray) &&
+      settingsArray.length > 0
+    ) {
       productPayload.additionalSettings = settingsArray;
     }
 
@@ -1218,18 +1400,18 @@ export const createProduct = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: userRole === 'admin'
-        ? 'Product created successfully'
-        : 'Product submitted for admin approval',
+      message:
+        userRole === "admin"
+          ? "Product created successfully"
+          : "Product submitted for admin approval",
       product,
-      requiresApproval: userRole !== 'admin'
+      requiresApproval: userRole !== "admin",
     });
-
   } catch (error) {
-    console.error('createProduct error:', error);
+    console.error("createProduct error:", error);
     return res.status(500).json({
       success: false,
-      message: error.message || 'Internal server error'
+      message: error.message || "Internal server error",
     });
   }
 };
@@ -1434,7 +1616,7 @@ export const createProduct = async (req, res) => {
 //   }
 // };
 
-const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 export const getAllProducts = async (req, res) => {
   try {
@@ -1469,7 +1651,7 @@ export const getAllProducts = async (req, res) => {
       featured,
       returnable,
       bestSeller,
-      exchangeAvailable
+      exchangeAvailable,
     } = req.query;
 
     // ============== MAIN QUERY ==============
@@ -1477,74 +1659,111 @@ export const getAllProducts = async (req, res) => {
 
     if (categoryId) query.categoryId = categoryId;
     if (subcategoryId) query.subcategoryId = subcategoryId;
-    if (isActive !== undefined) query.isActive = isActive === 'true';
+    if (isActive !== undefined) query.isActive = isActive === "true";
 
     // ---------- Brand (supports comma-separated) ----------
     if (brand) {
-      const brandArr = brand.split(',').map(b => b.trim()).filter(Boolean);
+      const brandArr = brand
+        .split(",")
+        .map((b) => b.trim())
+        .filter(Boolean);
       if (brandArr.length > 0) {
-        query.brand = { $in: brandArr.map(b => new RegExp(`^${escapeRegex(b)}$`, 'i')) };
+        query.brand = {
+          $in: brandArr.map((b) => new RegExp(`^${escapeRegex(b)}$`, "i")),
+        };
       }
     }
 
     // ---------- Gender (supports comma-separated) ----------
     if (gender) {
-      const genderArr = gender.split(',').map(g => g.trim()).filter(Boolean);
+      const genderArr = gender
+        .split(",")
+        .map((g) => g.trim())
+        .filter(Boolean);
       if (genderArr.length > 0) {
-        query.gender = { $in: genderArr.map(g => new RegExp(`^${escapeRegex(g)}$`, 'i')) };
+        query.gender = {
+          $in: genderArr.map((g) => new RegExp(`^${escapeRegex(g)}$`, "i")),
+        };
       }
     }
 
     // ---------- Exclusive ----------
     if (exclusiveProduct !== undefined) {
-      query.exclusiveProduct = exclusiveProduct === 'true';
+      query.exclusiveProduct = exclusiveProduct === "true";
     }
 
     // ---------- Specifications ----------
     const specFilter = (field, val) => {
       if (!val) return;
-      const arr = val.split(',').map(v => v.trim()).filter(Boolean);
+      const arr = val
+        .split(",")
+        .map((v) => v.trim())
+        .filter(Boolean);
       if (arr.length > 0) {
         query[`specifications.${field}`] = {
-          $in: arr.map(v => new RegExp(`^${escapeRegex(v)}$`, 'i'))
+          $in: arr.map((v) => new RegExp(`^${escapeRegex(v)}$`, "i")),
         };
       }
     };
 
-    specFilter('fabric', fabric);
-    specFilter('pattern', pattern);
-    specFilter('fit', fit);
-    specFilter('occasion', occasion);
-    specFilter('sleeve', sleeve);
-    specFilter('neck', neck);
-    specFilter('length', length);
-    specFilter('washCare', washCare);
+    specFilter("fabric", fabric);
+    specFilter("pattern", pattern);
+    specFilter("fit", fit);
+    specFilter("occasion", occasion);
+    specFilter("sleeve", sleeve);
+    specFilter("neck", neck);
+    specFilter("length", length);
+    specFilter("washCare", washCare);
 
     // ---------- Additional Settings ----------
     const settingFilter = (key, val) => {
       if (val === undefined) return;
-      const boolVal = val === 'true' || val === true;
+      const boolVal = val === "true" || val === true;
       query.additionalSettings = query.additionalSettings || {};
-      query.additionalSettings.$elemMatch = query.additionalSettings.$elemMatch || {};
+      query.additionalSettings.$elemMatch =
+        query.additionalSettings.$elemMatch || {};
       // Accumulate into $and instead — safer
     };
 
     // Better approach for multiple settings filters
     const settingsConditions = [];
     if (newArrival !== undefined) {
-      settingsConditions.push({ additionalSettings: { $elemMatch: { key: 'newArrival', value: newArrival === 'true' } } });
+      settingsConditions.push({
+        additionalSettings: {
+          $elemMatch: { key: "newArrival", value: newArrival === "true" },
+        },
+      });
     }
     if (featured !== undefined) {
-      settingsConditions.push({ additionalSettings: { $elemMatch: { key: 'featured', value: featured === 'true' } } });
+      settingsConditions.push({
+        additionalSettings: {
+          $elemMatch: { key: "featured", value: featured === "true" },
+        },
+      });
     }
     if (returnable !== undefined) {
-      settingsConditions.push({ additionalSettings: { $elemMatch: { key: 'returnable', value: returnable === 'true' } } });
+      settingsConditions.push({
+        additionalSettings: {
+          $elemMatch: { key: "returnable", value: returnable === "true" },
+        },
+      });
     }
     if (bestSeller !== undefined) {
-      settingsConditions.push({ additionalSettings: { $elemMatch: { key: 'bestSeller', value: bestSeller === 'true' } } });
+      settingsConditions.push({
+        additionalSettings: {
+          $elemMatch: { key: "bestSeller", value: bestSeller === "true" },
+        },
+      });
     }
     if (exchangeAvailable !== undefined) {
-      settingsConditions.push({ additionalSettings: { $elemMatch: { key: 'exchangeAvailable', value: exchangeAvailable === 'true' } } });
+      settingsConditions.push({
+        additionalSettings: {
+          $elemMatch: {
+            key: "exchangeAvailable",
+            value: exchangeAvailable === "true",
+          },
+        },
+      });
     }
 
     if (settingsConditions.length > 0) {
@@ -1560,20 +1779,26 @@ export const getAllProducts = async (req, res) => {
 
     // ---------- Colors ----------
     if (colors) {
-      const colorArray = colors.split(',').map(c => c.trim()).filter(Boolean);
+      const colorArray = colors
+        .split(",")
+        .map((c) => c.trim())
+        .filter(Boolean);
       if (colorArray.length > 0) {
-        query['variants.color'] = {
-          $in: colorArray.map(c => new RegExp(`^${escapeRegex(c)}$`, 'i'))
+        query["variants.color"] = {
+          $in: colorArray.map((c) => new RegExp(`^${escapeRegex(c)}$`, "i")),
         };
       }
     }
 
     // ---------- Sizes ----------
     if (sizes) {
-      const sizeArray = sizes.split(',').map(s => s.trim()).filter(Boolean);
+      const sizeArray = sizes
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
       if (sizeArray.length > 0) {
-        query['variants.sizes.size'] = {
-          $in: sizeArray.map(s => new RegExp(`^${escapeRegex(s)}$`, 'i'))
+        query["variants.sizes.size"] = {
+          $in: sizeArray.map((s) => new RegExp(`^${escapeRegex(s)}$`, "i")),
         };
       }
     }
@@ -1585,7 +1810,10 @@ export const getAllProducts = async (req, res) => {
 
     // ---------- Tags ----------
     if (tags) {
-      const tagsArray = tags.split(',').map(t => t.trim()).filter(Boolean);
+      const tagsArray = tags
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
       if (tagsArray.length > 0) {
         query.tags = { $in: tagsArray };
       }
@@ -1594,16 +1822,16 @@ export const getAllProducts = async (req, res) => {
     // ---------- Search ----------
     if (search) {
       query.$or = [
-        { name: { $regex: escapeRegex(search), $options: 'i' } },
-        { description: { $regex: escapeRegex(search), $options: 'i' } },
-        { shortDescription: { $regex: escapeRegex(search), $options: 'i' } },
-        { brand: { $regex: escapeRegex(search), $options: 'i' } }
+        { name: { $regex: escapeRegex(search), $options: "i" } },
+        { description: { $regex: escapeRegex(search), $options: "i" } },
+        { shortDescription: { $regex: escapeRegex(search), $options: "i" } },
+        { brand: { $regex: escapeRegex(search), $options: "i" } },
       ];
     }
 
     // ---------- Public user scope ----------
-    if (!req.user || req.user.role !== 'admin') {
-      query.approvalStatus = { $in: ['approved', 'not_required'] };
+    if (!req.user || req.user.role !== "admin") {
+      query.approvalStatus = { $in: ["approved", "not_required"] };
       query.isActive = true;
     }
 
@@ -1611,15 +1839,15 @@ export const getAllProducts = async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     let sort = {};
-    if (sortBy === 'price_asc') sort.displayPrice = 1;
-    else if (sortBy === 'price_desc') sort.displayPrice = -1;
-    else if (sortBy === 'rating_desc') sort.averageRating = -1;
-    else if (sortBy === 'popularity') sort.totalSold = -1;
-    else if (sortBy === 'newest') sort.createdAt = -1;
+    if (sortBy === "price_asc") sort.displayPrice = 1;
+    else if (sortBy === "price_desc") sort.displayPrice = -1;
+    else if (sortBy === "rating_desc") sort.averageRating = -1;
+    else if (sortBy === "popularity") sort.totalSold = -1;
+    else if (sortBy === "newest") sort.createdAt = -1;
     else sort.createdAt = -1;
 
     const products = await Product.find(query)
-      .populate('categoryId', 'name')
+      .populate("categoryId", "name")
       .sort(sort)
       .skip(skip)
       .limit(parseInt(limit));
@@ -1631,16 +1859,16 @@ export const getAllProducts = async (req, res) => {
     const baseQuery = {};
     if (categoryId) baseQuery.categoryId = categoryId;
     if (subcategoryId) baseQuery.subcategoryId = subcategoryId;
-    if (isActive !== undefined) baseQuery.isActive = isActive === 'true';
+    if (isActive !== undefined) baseQuery.isActive = isActive === "true";
     if (search) {
       baseQuery.$or = [
-        { name: { $regex: escapeRegex(search), $options: 'i' } },
-        { description: { $regex: escapeRegex(search), $options: 'i' } },
-        { shortDescription: { $regex: escapeRegex(search), $options: 'i' } }
+        { name: { $regex: escapeRegex(search), $options: "i" } },
+        { description: { $regex: escapeRegex(search), $options: "i" } },
+        { shortDescription: { $regex: escapeRegex(search), $options: "i" } },
       ];
     }
-    if (!req.user || req.user.role !== 'admin') {
-      baseQuery.approvalStatus = { $in: ['approved', 'not_required'] };
+    if (!req.user || req.user.role !== "admin") {
+      baseQuery.approvalStatus = { $in: ["approved", "not_required"] };
       baseQuery.isActive = true;
     }
 
@@ -1656,10 +1884,10 @@ export const getAllProducts = async (req, res) => {
       {
         $group: {
           _id: null,
-          minPrice: { $min: '$displayPrice' },
-          maxPrice: { $max: '$displayPrice' }
-        }
-      }
+          minPrice: { $min: "$displayPrice" },
+          maxPrice: { $max: "$displayPrice" },
+        },
+      },
     ]);
     if (priceStats.length > 0) {
       priceRange = { min: priceStats[0].minPrice, max: priceStats[0].maxPrice };
@@ -1668,37 +1896,41 @@ export const getAllProducts = async (req, res) => {
     // Unique colors
     const colorResults = await Product.aggregate([
       { $match: baseQuery },
-      { $unwind: '$variants' },
+      { $unwind: "$variants" },
       {
         $group: {
-          _id: { $toLower: '$variants.color' },
-          original: { $first: '$variants.color' }
-        }
+          _id: { $toLower: "$variants.color" },
+          original: { $first: "$variants.color" },
+        },
       },
-      { $sort: { original: 1 } }
+      { $sort: { original: 1 } },
     ]);
-    allColors = colorResults.map(c => c.original).filter(Boolean);
+    allColors = colorResults.map((c) => c.original).filter(Boolean);
 
     // Unique sizes
     const sizeResults = await Product.aggregate([
       { $match: baseQuery },
-      { $unwind: '$variants' },
-      { $unwind: '$variants.sizes' },
+      { $unwind: "$variants" },
+      { $unwind: "$variants.sizes" },
       {
         $group: {
-          _id: { $toLower: '$variants.sizes.size' },
-          original: { $first: '$variants.sizes.size' }
-        }
-      }
+          _id: { $toLower: "$variants.sizes.size" },
+          original: { $first: "$variants.sizes.size" },
+        },
+      },
     ]);
 
-    const SIZE_ORDER = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', 'Custom'];
+    const SIZE_ORDER = ["XS", "S", "M", "L", "XL", "XXL", "XXXL", "Custom"];
     allSizes = sizeResults
-      .map(s => s.original)
+      .map((s) => s.original)
       .filter(Boolean)
       .sort((a, b) => {
-        const ai = SIZE_ORDER.findIndex(s => s.toLowerCase() === a.toLowerCase());
-        const bi = SIZE_ORDER.findIndex(s => s.toLowerCase() === b.toLowerCase());
+        const ai = SIZE_ORDER.findIndex(
+          (s) => s.toLowerCase() === a.toLowerCase(),
+        );
+        const bi = SIZE_ORDER.findIndex(
+          (s) => s.toLowerCase() === b.toLowerCase(),
+        );
         if (ai === -1 && bi === -1) return a.localeCompare(b);
         if (ai === -1) return 1;
         if (bi === -1) return -1;
@@ -1707,19 +1939,26 @@ export const getAllProducts = async (req, res) => {
 
     // Unique brands
     const brandResults = await Product.aggregate([
-      { $match: { ...baseQuery, brand: { $nin: ['', null] } } },
-      { $group: { _id: { $toLower: '$brand' }, original: { $first: '$brand' } } },
-      { $sort: { original: 1 } }
+      { $match: { ...baseQuery, brand: { $nin: ["", null] } } },
+      {
+        $group: { _id: { $toLower: "$brand" }, original: { $first: "$brand" } },
+      },
+      { $sort: { original: 1 } },
     ]);
-    allBrands = brandResults.map(b => b.original).filter(Boolean);
+    allBrands = brandResults.map((b) => b.original).filter(Boolean);
 
     // Unique genders
     const genderResults = await Product.aggregate([
-      { $match: { ...baseQuery, gender: { $nin: ['', null] } } },
-      { $group: { _id: { $toLower: '$gender' }, original: { $first: '$gender' } } },
-      { $sort: { original: 1 } }
+      { $match: { ...baseQuery, gender: { $nin: ["", null] } } },
+      {
+        $group: {
+          _id: { $toLower: "$gender" },
+          original: { $first: "$gender" },
+        },
+      },
+      { $sort: { original: 1 } },
     ]);
-    allGenders = genderResults.map(g => g.original).filter(Boolean);
+    allGenders = genderResults.map((g) => g.original).filter(Boolean);
 
     return res.status(200).json({
       success: true,
@@ -1732,16 +1971,15 @@ export const getAllProducts = async (req, res) => {
         sizes: allSizes,
         brands: allBrands,
         genders: allGenders,
-        priceRange
+        priceRange,
       },
-      products
+      products,
     });
-
   } catch (error) {
-    console.error('getAllProducts error:', error);
+    console.error("getAllProducts error:", error);
     return res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: "Internal server error",
     });
   }
 };
@@ -1750,33 +1988,36 @@ export const getProductById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const product = await Product.findById(id)
+    const product = await Product.findById(id);
 
     if (!product) {
       return res.status(404).json({
         success: false,
-        message: 'Product not found'
+        message: "Product not found",
       });
     }
-     
-     if (!req.user || req.user.role !== 'admin') {
-     if (!product.isActive || 
-        (!product.createdBy === 'admin' && product.approvalStatus !== 'approved')) {
-      return res.status(404).json({
-        success: false,
-        message: 'Product not available'
+
+    if (!req.user || req.user.role !== "admin") {
+      if (
+        !product.isActive ||
+        (!product.createdBy === "admin" &&
+          product.approvalStatus !== "approved")
+      ) {
+        return res.status(404).json({
+          success: false,
+          message: "Product not available",
+        });
+      }
+      return res.status(200).json({
+        success: true,
+        product,
       });
     }
-    return res.status(200).json({
-      success: true,
-      product
-    });
-  }
   } catch (error) {
-    console.error('getProductById error:', error);
+    console.error("getProductById error:", error);
     return res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: "Internal server error",
     });
   }
 };
@@ -1789,16 +2030,16 @@ export const getProductsByCreatorId = async (req, res) => {
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     let query = { creatorId: creatorId };
-    
+
     // Optional role filter
-    if (role && ['admin', 'designer', 'tailor'].includes(role)) {
+    if (role && ["admin", "designer", "tailor"].includes(role)) {
       query.createdBy = role;
     }
 
     // For public users, only show approved products
-    if (!req.user || req.user.role !== 'admin') {
+    if (!req.user || req.user.role !== "admin") {
       query.isActive = true;
-      query.approvalStatus = { $in: ['approved', 'not_required'] };
+      query.approvalStatus = { $in: ["approved", "not_required"] };
     }
 
     const products = await Product.find(query)
@@ -1814,14 +2055,13 @@ export const getProductsByCreatorId = async (req, res) => {
       total,
       page: parseInt(page),
       pages: Math.ceil(total / parseInt(limit)),
-      products
+      products,
     });
-
   } catch (error) {
-    console.error('getProductsByCreatorId error:', error);
+    console.error("getProductsByCreatorId error:", error);
     return res.status(500).json({
       success: false,
-      message: 'Internal server error'
+      message: "Internal server error",
     });
   }
 };
@@ -1877,7 +2117,7 @@ export const getProductsByCreatorId = async (req, res) => {
 //           message: 'Category not found'
 //         });
 //       }
-      
+
 //       if (subcategoryId) {
 //         const subcategory = category.subcategories.id(subcategoryId);
 //         if (!subcategory) {
@@ -1889,7 +2129,7 @@ export const getProductsByCreatorId = async (req, res) => {
 //         product.subcategoryName = subcategory.name;
 //         product.subcategoryId = subcategoryId;
 //       }
-      
+
 //       product.categoryId = categoryId;
 //     }
 
@@ -1897,14 +2137,14 @@ export const getProductsByCreatorId = async (req, res) => {
 //     if (variants) {
 //       try {
 //         let variantsArray = typeof variants === 'string' ? JSON.parse(variants) : variants;
-        
+
 //         // Track current image index for sequential distribution
 //         let currentImageIndex = 0;
-        
+
 //         // Process each variant for new structure
 //         const processedVariants = variantsArray.map((variant, index) => {
 //           let variantImages = [];
-          
+
 //           // Handle image distribution
 //           if (imageFiles.length > 0) {
 //             const imageCount = variant.imageCount || 1;
@@ -1918,7 +2158,7 @@ export const getProductsByCreatorId = async (req, res) => {
 //             // Keep existing images if no new ones
 //             variantImages = variant.images;
 //           }
-          
+
 //           // Process sizes array
 //           let sizesArray = variant.sizes || [];
 //           if (typeof sizesArray === 'string') {
@@ -1928,7 +2168,7 @@ export const getProductsByCreatorId = async (req, res) => {
 //               sizesArray = [];
 //             }
 //           }
-          
+
 //           return {
 //             color: variant.color,
 //             price: parseFloat(variant.price),
@@ -1938,9 +2178,9 @@ export const getProductsByCreatorId = async (req, res) => {
 //             isActive: variant.isActive !== false
 //           };
 //         });
-        
+
 //         product.variants = processedVariants;
-        
+
 //       } catch (e) {
 //         console.error('Variants parse error:', e);
 //         return res.status(400).json({
@@ -1950,7 +2190,6 @@ export const getProductsByCreatorId = async (req, res) => {
 //         });
 //       }
 //     }
-
 
 //     // Update tags
 //     if (tags) {
@@ -2002,7 +2241,7 @@ export const updateProductById = async (req, res) => {
       specifications,
       shipping,
       deliveryOptions,
-      additionalSettings
+      additionalSettings,
     } = req.body;
 
     const userId = req.user.id;
@@ -2012,27 +2251,27 @@ export const updateProductById = async (req, res) => {
     if (!product) {
       return res.status(404).json({
         success: false,
-        message: 'Product not found'
+        message: "Product not found",
       });
     }
 
     // ---------- Permissions ----------
-    if (product.creatorId.toString() !== userId && userRole !== 'admin') {
+    if (product.creatorId.toString() !== userId && userRole !== "admin") {
       return res.status(403).json({
         success: false,
-        message: 'Unauthorized to update this product'
+        message: "Unauthorized to update this product",
       });
     }
 
     // ═══════════════════════════════════════════════════════════════
     // ✅ NEW FILE PROCESSING — same pattern as createProduct
     // ═══════════════════════════════════════════════════════════════
-    const variantImageMap = {};   // { variantIndex: [files] }
-    const videoFiles = [];        // only `product_video` files
+    const variantImageMap = {}; // { variantIndex: [files] }
+    const videoFiles = []; // only `product_video` files
 
     if (req.files && Array.isArray(req.files)) {
-      req.files.forEach(file => {
-        if (file.mimetype.startsWith('image/')) {
+      req.files.forEach((file) => {
+        if (file.mimetype.startsWith("image/")) {
           // Must match variant_<N>_images (already enforced by multer)
           const match = file.fieldname.match(/^variant_(\d+)_images$/);
           if (match) {
@@ -2040,38 +2279,45 @@ export const updateProductById = async (req, res) => {
             if (!variantImageMap[idx]) variantImageMap[idx] = [];
             variantImageMap[idx].push(file);
           }
-        } else if (file.mimetype.startsWith('video/')) {
+        } else if (file.mimetype.startsWith("video/")) {
           // Only accept `product_video` (already enforced by multer)
-          if (file.fieldname === 'product_video') {
+          if (file.fieldname === "product_video") {
             videoFiles.push(file);
           }
         }
       });
     }
 
-    console.log('📸 Variant images (update):', Object.keys(variantImageMap)
-      .map(k => `${k}: ${variantImageMap[k].length}`).join(', ') || 'none');
-    console.log('🎥 Videos (update):', videoFiles.length);
+    console.log(
+      "📸 Variant images (update):",
+      Object.keys(variantImageMap)
+        .map((k) => `${k}: ${variantImageMap[k].length}`)
+        .join(", ") || "none",
+    );
+    console.log("🎥 Videos (update):", videoFiles.length);
 
     // ═══════════════════════════════════════════════════════════════
     // BASIC FIELDS
     // ═══════════════════════════════════════════════════════════════
     if (name) product.name = name;
     if (description) product.description = description;
-    if (shortDescription !== undefined) product.shortDescription = shortDescription;
+    if (shortDescription !== undefined)
+      product.shortDescription = shortDescription;
     if (brand !== undefined) product.brand = brand;
     if (gender !== undefined) product.gender = gender;
 
     if (isActive !== undefined) {
-      product.isActive = typeof isActive === 'boolean' ? isActive : isActive === 'true';
+      product.isActive =
+        typeof isActive === "boolean" ? isActive : isActive === "true";
     }
 
     // ---------- exclusiveProduct ----------
     if (exclusiveProduct !== undefined) {
-      if (typeof exclusiveProduct === 'boolean') {
+      if (typeof exclusiveProduct === "boolean") {
         product.exclusiveProduct = exclusiveProduct;
-      } else if (typeof exclusiveProduct === 'string') {
-        product.exclusiveProduct = exclusiveProduct === 'true' || exclusiveProduct === '1';
+      } else if (typeof exclusiveProduct === "string") {
+        product.exclusiveProduct =
+          exclusiveProduct === "true" || exclusiveProduct === "1";
       }
     }
 
@@ -2079,7 +2325,7 @@ export const updateProductById = async (req, res) => {
     const parseJSON = (val) => {
       if (!val) return null;
       try {
-        return typeof val === 'string' ? JSON.parse(val) : val;
+        return typeof val === "string" ? JSON.parse(val) : val;
       } catch (e) {
         return null;
       }
@@ -2090,7 +2336,7 @@ export const updateProductById = async (req, res) => {
     if (specs) {
       product.specifications = {
         ...(product.specifications?.toObject?.() || {}),
-        ...specs
+        ...specs,
       };
     }
 
@@ -2099,7 +2345,7 @@ export const updateProductById = async (req, res) => {
     if (ship) {
       product.shipping = {
         ...(product.shipping?.toObject?.() || {}),
-        ...ship
+        ...ship,
       };
     }
 
@@ -2108,7 +2354,7 @@ export const updateProductById = async (req, res) => {
     if (del) {
       product.deliveryOptions = {
         ...(product.deliveryOptions?.toObject?.() || {}),
-        ...del
+        ...del,
       };
     }
 
@@ -2126,7 +2372,7 @@ export const updateProductById = async (req, res) => {
       if (!category) {
         return res.status(404).json({
           success: false,
-          message: 'Category not found'
+          message: "Category not found",
         });
       }
 
@@ -2135,7 +2381,7 @@ export const updateProductById = async (req, res) => {
         if (!subcategory) {
           return res.status(404).json({
             success: false,
-            message: 'Subcategory not found'
+            message: "Subcategory not found",
           });
         }
         product.subcategoryName = subcategory.name;
@@ -2150,17 +2396,16 @@ export const updateProductById = async (req, res) => {
     // ═══════════════════════════════════════════════════════════════
     if (variants) {
       try {
-        const variantsArray = typeof variants === 'string'
-          ? JSON.parse(variants)
-          : variants;
+        const variantsArray =
+          typeof variants === "string" ? JSON.parse(variants) : variants;
 
         const processedVariants = variantsArray.map((variant, index) => {
           let variantImages = [];
 
           // If new files uploaded for this variant index → use them
           if (variantImageMap[index] && variantImageMap[index].length > 0) {
-            variantImages = variantImageMap[index].map(file =>
-              getFileUrl(req, path.basename(file.path), 'products/images')
+            variantImages = variantImageMap[index].map((file) =>
+              getFileUrl(req, path.basename(file.path), "products/images"),
             );
           } else if (variant.images && Array.isArray(variant.images)) {
             // Otherwise keep existing images from the payload
@@ -2168,8 +2413,12 @@ export const updateProductById = async (req, res) => {
           }
 
           let sizesArray = variant.sizes || [];
-          if (typeof sizesArray === 'string') {
-            try { sizesArray = JSON.parse(sizesArray); } catch (e) { sizesArray = []; }
+          if (typeof sizesArray === "string") {
+            try {
+              sizesArray = JSON.parse(sizesArray);
+            } catch (e) {
+              sizesArray = [];
+            }
           }
 
           return {
@@ -2181,18 +2430,17 @@ export const updateProductById = async (req, res) => {
             sizes: sizesArray,
             images: variantImages,
             sku: variant.sku, // preserve existing SKU
-            isActive: variant.isActive !== false
+            isActive: variant.isActive !== false,
           };
         });
 
         product.variants = processedVariants;
-
       } catch (e) {
-        console.error('Variants parse error:', e);
+        console.error("Variants parse error:", e);
         return res.status(400).json({
           success: false,
-          message: 'Invalid variants format',
-          error: e.message
+          message: "Invalid variants format",
+          error: e.message,
         });
       }
     }
@@ -2201,8 +2449,8 @@ export const updateProductById = async (req, res) => {
     // ✅ VIDEOS — only if new `product_video` files uploaded
     // ═══════════════════════════════════════════════════════════════
     if (videoFiles.length > 0) {
-      const newVideoUrls = videoFiles.map(file =>
-        getFileUrl(req, path.basename(file.path), 'products/videos')
+      const newVideoUrls = videoFiles.map((file) =>
+        getFileUrl(req, path.basename(file.path), "products/videos"),
       );
       product.productVideos = newVideoUrls;
     }
@@ -2210,13 +2458,13 @@ export const updateProductById = async (req, res) => {
     // ---------- Tags ----------
     if (tags) {
       try {
-        product.tags = typeof tags === 'string' ? JSON.parse(tags) : tags;
+        product.tags = typeof tags === "string" ? JSON.parse(tags) : tags;
       } catch (e) {}
     }
 
     // ---------- Re-approval for non-admin ----------
-    if (userRole !== 'admin' && product.approvalStatus === 'approved') {
-      product.approvalStatus = 'pending';
+    if (userRole !== "admin" && product.approvalStatus === "approved") {
+      product.approvalStatus = "pending";
       product.isActive = false;
     }
 
@@ -2224,21 +2472,20 @@ export const updateProductById = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: userRole !== 'admin' && product.approvalStatus === 'pending'
-        ? 'Product updated and submitted for re-approval'
-        : 'Product updated successfully',
-      product
+      message:
+        userRole !== "admin" && product.approvalStatus === "pending"
+          ? "Product updated and submitted for re-approval"
+          : "Product updated successfully",
+      product,
     });
-
   } catch (error) {
-    console.error('updateProductById error:', error);
+    console.error("updateProductById error:", error);
     return res.status(500).json({
       success: false,
-      message: error.message || 'Internal server error'
+      message: error.message || "Internal server error",
     });
   }
 };
-
 
 // Delete Product By ID
 export const deleteProductById = async (req, res) => {
@@ -2251,24 +2498,24 @@ export const deleteProductById = async (req, res) => {
     if (!product) {
       return res.status(404).json({
         success: false,
-        message: 'Product not found'
+        message: "Product not found",
       });
     }
 
     // Check permissions
-    if (product.creatorId.toString() !== userId && userRole !== 'admin') {
+    if (product.creatorId.toString() !== userId && userRole !== "admin") {
       return res.status(403).json({
         success: false,
-        message: 'Unauthorized to delete this product'
+        message: "Unauthorized to delete this product",
       });
     }
 
     // Delete variant images
     if (product.variants && product.variants.length) {
-      product.variants.forEach(variant => {
+      product.variants.forEach((variant) => {
         if (variant.images && variant.images.length) {
-          variant.images.forEach(image => {
-            if (!image.startsWith('http')) {
+          variant.images.forEach((image) => {
+            if (!image.startsWith("http")) {
               deleteFile(image);
             }
           });
@@ -2278,16 +2525,15 @@ export const deleteProductById = async (req, res) => {
 
     // ✅ Delete product videos
     if (product.productVideos && product.productVideos.length) {
-      product.productVideos.forEach(video => {
-        if (!video.startsWith('http')) {
+      product.productVideos.forEach((video) => {
+        if (!video.startsWith("http")) {
           deleteFile(video);
         }
       });
     }
 
-
     // Soft delete for non-admin, hard delete for admin
-    if (userRole === 'admin') {
+    if (userRole === "admin") {
       await Product.findByIdAndDelete(id);
     } else {
       product.isActive = false;
@@ -2296,31 +2542,29 @@ export const deleteProductById = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Product deleted successfully'
+      message: "Product deleted successfully",
     });
-
   } catch (error) {
-    console.error('deleteProductById error:', error);
+    console.error("deleteProductById error:", error);
     return res.status(500).json({
       success: false,
-      message: error.message || 'Internal server error'
+      message: error.message || "Internal server error",
     });
   }
 };
-
 
 // Add Review To Product (No images array in review)
 export const addProductReview = async (req, res) => {
   try {
     const { id } = req.params;
     const { rating, description } = req.body;
-    const userId = req.user.id;  // ✅ From authenticated token
+    const userId = req.user.id; // ✅ From authenticated token
     const userName = req.user.name;
 
     if (!rating || !description) {
       return res.status(400).json({
         success: false,
-        message: 'Rating and description are required'
+        message: "Rating and description are required",
       });
     }
 
@@ -2328,29 +2572,29 @@ export const addProductReview = async (req, res) => {
     if (!product) {
       return res.status(404).json({
         success: false,
-        message: 'Product not found'
+        message: "Product not found",
       });
     }
 
     // Check if user already reviewed
     const alreadyReviewed = product.reviews.find(
-      review => review.user.toString() === userId
+      (review) => review.user.toString() === userId,
     );
 
     if (alreadyReviewed) {
       return res.status(400).json({
         success: false,
-        message: 'You have already reviewed this product'
+        message: "You have already reviewed this product",
       });
     }
 
     const review = {
       user: userId,
       userName: userName,
-      userImage: req.user.profileImage || '',
+      userImage: req.user.profileImage || "",
       rating: parseInt(rating),
       description,
-      createdAt: new Date()
+      createdAt: new Date(),
     };
 
     product.reviews.push(review);
@@ -2358,15 +2602,14 @@ export const addProductReview = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: 'Review added successfully',
-      review
+      message: "Review added successfully",
+      review,
     });
-
   } catch (error) {
-    console.error('addProductReview error:', error);
+    console.error("addProductReview error:", error);
     return res.status(500).json({
       success: false,
-      message: error.message || 'Internal server error'
+      message: error.message || "Internal server error",
     });
   }
 };
@@ -2385,20 +2628,20 @@ export const getProductsBySubcategory = async (req, res) => {
 
     // Search for category that contains this subcategory
     const allCategories = await Category.find();
-    
+
     for (const cat of allCategories) {
       const foundSubcategory = cat.subcategories.id(subcategoryId);
       if (foundSubcategory) {
         category = {
           _id: cat._id,
           name: cat.name,
-          isActive: cat.isActive
+          isActive: cat.isActive,
         };
         subcategory = {
           _id: foundSubcategory._id,
           name: foundSubcategory.name,
           image: foundSubcategory.image,
-          isActive: foundSubcategory.isActive
+          isActive: foundSubcategory.isActive,
         };
         categoryId = cat._id;
         break;
@@ -2409,7 +2652,7 @@ export const getProductsBySubcategory = async (req, res) => {
     if (!category) {
       return res.status(404).json({
         success: false,
-        message: 'Subcategory not found'
+        message: "Subcategory not found",
       });
     }
 
@@ -2417,12 +2660,12 @@ export const getProductsBySubcategory = async (req, res) => {
     const query = {
       subcategoryId: subcategoryId,
       isActive: true,
-      approvalStatus: { $in: ['approved', 'not_required'] }
+      approvalStatus: { $in: ["approved", "not_required"] },
     };
 
     // Get products with pagination
     const products = await Product.find(query)
-      .populate('categoryId', 'name')
+      .populate("categoryId", "name")
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -2430,21 +2673,23 @@ export const getProductsBySubcategory = async (req, res) => {
     const total = await Product.countDocuments(query);
 
     // Transform products for response
-    const transformedProducts = products.map(product => {
+    const transformedProducts = products.map((product) => {
       const productObj = product.toObject();
-      
-      const mainImage = productObj.mainImages?.[0] || 
-                        productObj.variants?.[0]?.images?.[0] || 
-                        null;
 
-      const variants = productObj.variants || [];                  
-      
-      const prices = productObj.variants?.map(v => v.discountPrice || v.price) || [];
+      const mainImage =
+        productObj.mainImages?.[0] ||
+        productObj.variants?.[0]?.images?.[0] ||
+        null;
+
+      const variants = productObj.variants || [];
+
+      const prices =
+        productObj.variants?.map((v) => v.discountPrice || v.price) || [];
       const priceRange = {
         min: prices.length ? Math.min(...prices) : 0,
-        max: prices.length ? Math.max(...prices) : 0
+        max: prices.length ? Math.max(...prices) : 0,
       };
-      
+
       return {
         _id: productObj._id,
         name: productObj.name,
@@ -2459,7 +2704,7 @@ export const getProductsBySubcategory = async (req, res) => {
         availableSizes: productObj.availableSizes || [],
         totalStock: productObj.totalStock || 0,
         averageRating: productObj.averageRating,
-        createdAt: productObj.createdAt
+        createdAt: productObj.createdAt,
       };
     });
 
@@ -2471,61 +2716,64 @@ export const getProductsBySubcategory = async (req, res) => {
       total,
       page: parseInt(page),
       pages: Math.ceil(total / parseInt(limit)),
-      products: transformedProducts
+      products: transformedProducts,
     });
-
   } catch (error) {
-    console.error('getProductsBySubcategory error:', error);
+    console.error("getProductsBySubcategory error:", error);
     return res.status(500).json({
       success: false,
-      message: error.message || 'Internal server error'
+      message: error.message || "Internal server error",
     });
   }
 };
 
 // ==================== ADD IMAGES TO VARIANT ====================
 export const addVariantImages = async (req, res) => {
-  console.log('=== ADD VARIANT IMAGES DEBUG ===');
-  console.log('req.files:', req.files);
-  console.log('Content-Type:', req.headers['content-type']);
-  
+  console.log("=== ADD VARIANT IMAGES DEBUG ===");
+  console.log("req.files:", req.files);
+  console.log("Content-Type:", req.headers["content-type"]);
+
   try {
     const { productId, variantId } = req.params;
     const imageFiles = req.files || [];
-    
+
     console.log(`📸 Received ${imageFiles.length} image(s)`);
 
     if (!imageFiles.length) {
       return res.status(400).json({
         success: false,
-        message: 'At least one image is required'
+        message: "At least one image is required",
       });
     }
-    
+
     const product = await Product.findById(productId);
     if (!product) {
-      return res.status(404).json({ success: false, message: 'Product not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
     }
-    
+
     const variant = product.variants.id(variantId);
     if (!variant) {
-      return res.status(404).json({ success: false, message: 'Variant not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Variant not found" });
     }
-    
-    const imageUrls = imageFiles.map(file => 
-      getFileUrl(req, path.basename(file.path), 'products')
+
+    const imageUrls = imageFiles.map((file) =>
+      getFileUrl(req, path.basename(file.path), "products"),
     );
-    
+
     // Add images to variant
     variant.images.push(...imageUrls);
-    
+
     // Update mainImages array in product (first image of each variant)
     product.mainImages = product.variants
-      .filter(v => v.images && v.images.length > 0)
-      .map(v => v.images[0]);
-    
+      .filter((v) => v.images && v.images.length > 0)
+      .map((v) => v.images[0]);
+
     await product.save();
-    
+
     return res.status(200).json({
       success: true,
       message: `${imageUrls.length} image(s) added to ${variant.color}`,
@@ -2535,12 +2783,11 @@ export const addVariantImages = async (req, res) => {
         price: variant.price,
         discountPrice: variant.discountPrice,
         images: variant.images,
-        sizes: variant.sizes
-      }
+        sizes: variant.sizes,
+      },
     });
-    
   } catch (error) {
-    console.error('addVariantImages error:', error);
+    console.error("addVariantImages error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -2549,17 +2796,21 @@ export const addVariantImages = async (req, res) => {
 export const getVariantImages = async (req, res) => {
   try {
     const { productId, variantId } = req.params;
-    
+
     const product = await Product.findById(productId);
     if (!product) {
-      return res.status(404).json({ success: false, message: 'Product not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
     }
-    
+
     const variant = product.variants.id(variantId);
     if (!variant) {
-      return res.status(404).json({ success: false, message: 'Variant not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Variant not found" });
     }
-    
+
     return res.status(200).json({
       success: true,
       variant: {
@@ -2569,12 +2820,11 @@ export const getVariantImages = async (req, res) => {
         discountPrice: variant.discountPrice,
         images: variant.images,
         sizes: variant.sizes,
-        totalImages: variant.images.length
-      }
+        totalImages: variant.images.length,
+      },
     });
-    
   } catch (error) {
-    console.error('getVariantImages error:', error);
+    console.error("getVariantImages error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -2584,31 +2834,35 @@ export const setVariantMainImage = async (req, res) => {
   try {
     const { productId, variantId } = req.params;
     const { imageUrl } = req.body;
-    
+
     if (!imageUrl) {
       return res.status(400).json({
         success: false,
-        message: 'Image URL is required'
+        message: "Image URL is required",
       });
     }
-    
+
     const product = await Product.findById(productId);
     if (!product) {
-      return res.status(404).json({ success: false, message: 'Product not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
     }
-    
+
     const variant = product.variants.id(variantId);
     if (!variant) {
-      return res.status(404).json({ success: false, message: 'Variant not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Variant not found" });
     }
-    
+
     if (!variant.images.includes(imageUrl)) {
       return res.status(400).json({
         success: false,
-        message: 'Image not found in variant gallery'
+        message: "Image not found in variant gallery",
       });
     }
-    
+
     // Note: In new schema, there's no separate mainImage field.
     // The first image in the array is considered the main image.
     // To set a main image, we need to reorder the images array.
@@ -2618,29 +2872,28 @@ export const setVariantMainImage = async (req, res) => {
       variant.images.splice(currentIndex, 1);
       variant.images.unshift(imageUrl);
     }
-    
+
     // Update product mainImages
     product.mainImages = product.variants
-      .filter(v => v.images && v.images.length > 0)
-      .map(v => v.images[0]);
-    
+      .filter((v) => v.images && v.images.length > 0)
+      .map((v) => v.images[0]);
+
     await product.save();
-    
+
     return res.status(200).json({
       success: true,
-      message: 'Main image updated successfully',
+      message: "Main image updated successfully",
       variant: {
         id: variant._id,
         color: variant.color,
         price: variant.price,
         discountPrice: variant.discountPrice,
         images: variant.images,
-        sizes: variant.sizes
-      }
+        sizes: variant.sizes,
+      },
     });
-    
   } catch (error) {
-    console.error('setVariantMainImage error:', error);
+    console.error("setVariantMainImage error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -2650,61 +2903,64 @@ export const removeVariantImage = async (req, res) => {
   try {
     const { productId, variantId } = req.params;
     const { imageUrl } = req.body;
-    
+
     if (!imageUrl) {
       return res.status(400).json({
         success: false,
-        message: 'Image URL is required'
+        message: "Image URL is required",
       });
     }
-    
+
     const product = await Product.findById(productId);
     if (!product) {
-      return res.status(404).json({ success: false, message: 'Product not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
     }
-    
+
     const variant = product.variants.id(variantId);
     if (!variant) {
-      return res.status(404).json({ success: false, message: 'Variant not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Variant not found" });
     }
-    
+
     if (!variant.images.includes(imageUrl)) {
       return res.status(400).json({
         success: false,
-        message: 'Image not found in variant gallery'
+        message: "Image not found in variant gallery",
       });
     }
-    
+
     // Remove image from array
-    variant.images = variant.images.filter(img => img !== imageUrl);
-    
+    variant.images = variant.images.filter((img) => img !== imageUrl);
+
     // Update product mainImages
     product.mainImages = product.variants
-      .filter(v => v.images && v.images.length > 0)
-      .map(v => v.images[0]);
-    
+      .filter((v) => v.images && v.images.length > 0)
+      .map((v) => v.images[0]);
+
     await product.save();
-    
+
     // Delete physical file if not a URL
-    if (!imageUrl.startsWith('http')) {
+    if (!imageUrl.startsWith("http")) {
       deleteFile(imageUrl);
     }
-    
+
     return res.status(200).json({
       success: true,
-      message: 'Image removed successfully',
+      message: "Image removed successfully",
       variant: {
         id: variant._id,
         color: variant.color,
         price: variant.price,
         discountPrice: variant.discountPrice,
         images: variant.images,
-        sizes: variant.sizes
-      }
+        sizes: variant.sizes,
+      },
     });
-    
   } catch (error) {
-    console.error('removeVariantImage error:', error);
+    console.error("removeVariantImage error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -2713,34 +2969,38 @@ export const removeVariantImage = async (req, res) => {
 export const deleteAllVariantImages = async (req, res) => {
   try {
     const { productId, variantId } = req.params;
-    
+
     const product = await Product.findById(productId);
     if (!product) {
-      return res.status(404).json({ success: false, message: 'Product not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
     }
-    
+
     const variant = product.variants.id(variantId);
     if (!variant) {
-      return res.status(404).json({ success: false, message: 'Variant not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Variant not found" });
     }
-    
+
     // Delete physical files
-    variant.images.forEach(image => {
-      if (!image.startsWith('http')) {
+    variant.images.forEach((image) => {
+      if (!image.startsWith("http")) {
         deleteFile(image);
       }
     });
-    
+
     // Clear images array
     variant.images = [];
-    
+
     // Update product mainImages
     product.mainImages = product.variants
-      .filter(v => v.images && v.images.length > 0)
-      .map(v => v.images[0]);
-    
+      .filter((v) => v.images && v.images.length > 0)
+      .map((v) => v.images[0]);
+
     await product.save();
-    
+
     return res.status(200).json({
       success: true,
       message: `All images removed from ${variant.color} variant`,
@@ -2750,12 +3010,11 @@ export const deleteAllVariantImages = async (req, res) => {
         price: variant.price,
         discountPrice: variant.discountPrice,
         images: variant.images,
-        sizes: variant.sizes
-      }
+        sizes: variant.sizes,
+      },
     });
-    
   } catch (error) {
-    console.error('deleteAllVariantImages error:', error);
+    console.error("deleteAllVariantImages error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -2765,61 +3024,65 @@ export const reorderVariantImages = async (req, res) => {
   try {
     const { productId, variantId } = req.params;
     const { imageOrder } = req.body;
-    
+
     if (!imageOrder || !Array.isArray(imageOrder)) {
       return res.status(400).json({
         success: false,
-        message: 'imageOrder array is required'
+        message: "imageOrder array is required",
       });
     }
-    
+
     const product = await Product.findById(productId);
     if (!product) {
-      return res.status(404).json({ success: false, message: 'Product not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Product not found" });
     }
-    
+
     const variant = product.variants.id(variantId);
     if (!variant) {
-      return res.status(404).json({ success: false, message: 'Variant not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Variant not found" });
     }
-    
+
     // Verify all images exist
-    const allImagesExist = imageOrder.every(url => variant.images.includes(url));
+    const allImagesExist = imageOrder.every((url) =>
+      variant.images.includes(url),
+    );
     if (!allImagesExist) {
       return res.status(400).json({
         success: false,
-        message: 'Some images in order do not exist in variant'
+        message: "Some images in order do not exist in variant",
       });
     }
-    
+
     variant.images = imageOrder;
-    
+
     // Update product mainImages
     product.mainImages = product.variants
-      .filter(v => v.images && v.images.length > 0)
-      .map(v => v.images[0]);
-    
+      .filter((v) => v.images && v.images.length > 0)
+      .map((v) => v.images[0]);
+
     await product.save();
-    
+
     return res.status(200).json({
       success: true,
-      message: 'Images reordered successfully',
+      message: "Images reordered successfully",
       variant: {
         id: variant._id,
         color: variant.color,
         price: variant.price,
         discountPrice: variant.discountPrice,
         images: variant.images,
-        sizes: variant.sizes
-      }
+        sizes: variant.sizes,
+      },
     });
-    
   } catch (error) {
-    console.error('reorderVariantImages error:', error);
+    console.error("reorderVariantImages error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
-
 
 // Get all orders (Admin)
 export const getAllOrders = async (req, res) => {
@@ -2831,14 +3094,15 @@ export const getAllOrders = async (req, res) => {
       paymentMethod,
       startDate,
       endDate,
-      search
+      search,
     } = req.query;
 
     let query = {};
 
-    if (status && status !== 'all') query.orderStatus = status;
-    if (paymentMethod && paymentMethod !== 'all') query.paymentMethod = paymentMethod;
-    
+    if (status && status !== "all") query.orderStatus = status;
+    if (paymentMethod && paymentMethod !== "all")
+      query.paymentMethod = paymentMethod;
+
     if (startDate || endDate) {
       query.createdAt = {};
       if (startDate) query.createdAt.$gte = new Date(startDate);
@@ -2846,21 +3110,23 @@ export const getAllOrders = async (req, res) => {
     }
 
     if (search) {
-      if (search.startsWith('ORD')) {
-        query.orderId = { $regex: search, $options: 'i' };
+      if (search.startsWith("ORD")) {
+        query.orderId = { $regex: search, $options: "i" };
       } else {
         const users = await User.find({
           $or: [
-            { name: { $regex: search, $options: 'i' } },
-            { mobile: { $regex: search, $options: 'i' } }
-          ]
-        }).select('_id');
-        
-        const userIds = users.map(u => u._id);
+            { name: { $regex: search, $options: "i" } },
+            { mobile: { $regex: search, $options: "i" } },
+          ],
+        }).select("_id");
+
+        const userIds = users.map((u) => u._id);
         if (userIds.length > 0) {
           query.userId = { $in: userIds };
         } else {
-          return res.status(200).json({ success: true, count: 0, total: 0, orders: [] });
+          return res
+            .status(200)
+            .json({ success: true, count: 0, total: 0, orders: [] });
         }
       }
     }
@@ -2870,7 +3136,7 @@ export const getAllOrders = async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
-      .populate('userId', 'name email mobile');
+      .populate("userId", "name email mobile");
 
     const total = await Order.countDocuments(query);
 
@@ -2880,16 +3146,28 @@ export const getAllOrders = async (req, res) => {
         $group: {
           _id: null,
           totalOrders: { $sum: 1 },
-          totalRevenue: { $sum: '$finalAmount' },
-          averageOrderValue: { $avg: '$finalAmount' },
-          pendingOrders: { $sum: { $cond: [{ $eq: ['$orderStatus', 'pending'] }, 1, 0] } },
-          confirmedOrders: { $sum: { $cond: [{ $eq: ['$orderStatus', 'confirmed'] }, 1, 0] } },
-          processingOrders: { $sum: { $cond: [{ $eq: ['$orderStatus', 'processing'] }, 1, 0] } },
-          shippedOrders: { $sum: { $cond: [{ $eq: ['$orderStatus', 'shipped'] }, 1, 0] } },
-          deliveredOrders: { $sum: { $cond: [{ $eq: ['$orderStatus', 'delivered'] }, 1, 0] } },
-          cancelledOrders: { $sum: { $cond: [{ $eq: ['$orderStatus', 'cancelled'] }, 1, 0] } }
-        }
-      }
+          totalRevenue: { $sum: "$finalAmount" },
+          averageOrderValue: { $avg: "$finalAmount" },
+          pendingOrders: {
+            $sum: { $cond: [{ $eq: ["$orderStatus", "pending"] }, 1, 0] },
+          },
+          confirmedOrders: {
+            $sum: { $cond: [{ $eq: ["$orderStatus", "confirmed"] }, 1, 0] },
+          },
+          processingOrders: {
+            $sum: { $cond: [{ $eq: ["$orderStatus", "processing"] }, 1, 0] },
+          },
+          shippedOrders: {
+            $sum: { $cond: [{ $eq: ["$orderStatus", "shipped"] }, 1, 0] },
+          },
+          deliveredOrders: {
+            $sum: { $cond: [{ $eq: ["$orderStatus", "delivered"] }, 1, 0] },
+          },
+          cancelledOrders: {
+            $sum: { $cond: [{ $eq: ["$orderStatus", "cancelled"] }, 1, 0] },
+          },
+        },
+      },
     ]);
 
     return res.status(200).json({
@@ -2899,15 +3177,20 @@ export const getAllOrders = async (req, res) => {
       page: parseInt(page),
       pages: Math.ceil(total / parseInt(limit)),
       stats: stats[0] || {
-        totalOrders: 0, totalRevenue: 0, averageOrderValue: 0,
-        pendingOrders: 0, confirmedOrders: 0, processingOrders: 0,
-        shippedOrders: 0, deliveredOrders: 0, cancelledOrders: 0
+        totalOrders: 0,
+        totalRevenue: 0,
+        averageOrderValue: 0,
+        pendingOrders: 0,
+        confirmedOrders: 0,
+        processingOrders: 0,
+        shippedOrders: 0,
+        deliveredOrders: 0,
+        cancelledOrders: 0,
       },
-      orders
+      orders,
     });
-
   } catch (error) {
-    console.error('getAllOrders error:', error);
+    console.error("getAllOrders error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -2917,38 +3200,46 @@ export const getOrderByIdAdmin = async (req, res) => {
   try {
     const { orderId } = req.params;
 
-    const order = await Order.findOne({ orderId }).populate('userId', 'name email mobile');
-    
+    const order = await Order.findOne({ orderId }).populate(
+      "userId",
+      "name email mobile",
+    );
+
     if (!order) {
-      return res.status(404).json({ success: false, message: 'Order not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
     }
 
     // Get product details for each item
-    const itemsWithDetails = await Promise.all(order.items.map(async (item) => {
-      const product = await Product.findById(item.productId).select('name description images');
-      const variant = product?.variants?.id(item.variantId);
-      const sizeObj = variant?.sizes?.id(item.sizeId);
-      
-      return {
-        ...item.toObject(),
-        productName: product?.name,
-        productDescription: product?.description,
-        productImage: product?.images?.[0] || variant?.images?.[0] || null,
-        color: variant?.color,
-        sizeName: sizeObj?.size
-      };
-    }));
+    const itemsWithDetails = await Promise.all(
+      order.items.map(async (item) => {
+        const product = await Product.findById(item.productId).select(
+          "name description images",
+        );
+        const variant = product?.variants?.id(item.variantId);
+        const sizeObj = variant?.sizes?.id(item.sizeId);
+
+        return {
+          ...item.toObject(),
+          productName: product?.name,
+          productDescription: product?.description,
+          productImage: product?.images?.[0] || variant?.images?.[0] || null,
+          color: variant?.color,
+          sizeName: sizeObj?.size,
+        };
+      }),
+    );
 
     return res.status(200).json({
       success: true,
       order: {
         ...order.toObject(),
-        items: itemsWithDetails
-      }
+        items: itemsWithDetails,
+      },
     });
-
   } catch (error) {
-    console.error('getOrderByIdAdmin error:', error);
+    console.error("getOrderByIdAdmin error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -2965,7 +3256,7 @@ export const getOrderByIdAdmin = async (req, res) => {
 
 //     const oldStatus = order.orderStatus;
 //     const validStatuses = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled'];
-    
+
 //     if (orderStatus && !validStatuses.includes(orderStatus)) {
 //       return res.status(400).json({
 //         success: false,
@@ -2976,17 +3267,17 @@ export const getOrderByIdAdmin = async (req, res) => {
 //     // ✅ Update individual item status when order status changes
 //     if (orderStatus) {
 //       order.orderStatus = orderStatus;
-      
+
 //       // Update all items to the same status
 //       order.items.forEach(item => {
 //         item.status = orderStatus;
 //       });
 //     }
-    
+
 //     if (paymentStatus) order.paymentStatus = paymentStatus;
 //     if (trackingId) order.trackingId = trackingId;
 //     if (estimatedDelivery) order.estimatedDelivery = new Date(estimatedDelivery);
-    
+
 //     if (orderStatus === 'delivered') order.deliveredAt = new Date();
 //     if (orderStatus === 'cancelled') order.cancelledAt = new Date();
 
@@ -3023,15 +3314,18 @@ export const updateOrderStatus = async (req, res) => {
 
     const order = await Order.findOne({ orderId });
     if (!order) {
-      return res.status(404).json({ success: false, message: 'Order not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
     }
 
     // ✅ Check if order is being marked as delivered
-    const isDelivered = orderStatus === 'delivered' && order.orderStatus !== 'delivered';
+    const isDelivered =
+      orderStatus === "delivered" && order.orderStatus !== "delivered";
 
     // Update order status
     order.orderStatus = orderStatus;
-    if (orderStatus === 'delivered') {
+    if (orderStatus === "delivered") {
       order.deliveredAt = new Date();
     }
     await order.save();
@@ -3044,11 +3338,10 @@ export const updateOrderStatus = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: `Order status updated to ${orderStatus}`,
-      data: order
+      data: order,
     });
-
   } catch (error) {
-    console.error('updateOrderStatus error:', error);
+    console.error("updateOrderStatus error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -3062,18 +3355,19 @@ const processCashbackForOrder = async (order) => {
     // Get settings
     const settings = await DesignerSettings.findOne();
     if (!settings) {
-      console.log('❌ Designer settings not found');
+      console.log("❌ Designer settings not found");
       return;
     }
 
-    const { productFee, cashbackPercentage, salesThresholdForCashback } = settings;
+    const { productFee, cashbackPercentage, salesThresholdForCashback } =
+      settings;
 
     // Process each item in the order
     for (const item of order.items) {
       const product = await Product.findById(item.productId);
-      
+
       // ✅ Only process designer products
-      if (!product || product.createdBy !== 'designer') {
+      if (!product || product.createdBy !== "designer") {
         continue;
       }
 
@@ -3084,9 +3378,10 @@ const processCashbackForOrder = async (order) => {
 
       // ✅ Check if cashback already given for this product
       const cashbackGiven = designer.wallet.transactions.some(
-        t => t.referenceId === product._id.toString() && 
-             t.type === 'cashback' && 
-             t.status === 'completed'
+        (t) =>
+          t.referenceId === product._id.toString() &&
+          t.type === "cashback" &&
+          t.status === "completed",
       );
 
       if (cashbackGiven) {
@@ -3096,11 +3391,13 @@ const processCashbackForOrder = async (order) => {
 
       // ✅ Count total delivered orders for this product
       const deliveredCount = await Order.countDocuments({
-        'items.productId': product._id,
-        orderStatus: 'delivered'
+        "items.productId": product._id,
+        orderStatus: "delivered",
       });
 
-      console.log(`📊 Product: ${product.name}, Delivered: ${deliveredCount}, Threshold: ${salesThresholdForCashback}`);
+      console.log(
+        `📊 Product: ${product.name}, Delivered: ${deliveredCount}, Threshold: ${salesThresholdForCashback}`,
+      );
 
       // ✅ Check if threshold met
       if (deliveredCount >= salesThresholdForCashback) {
@@ -3109,59 +3406,70 @@ const processCashbackForOrder = async (order) => {
 
         // ✅ Add cashback to designer's wallet
         designer.wallet.transactions.push({
-          type: 'cashback',
+          type: "cashback",
           amount: cashbackAmount,
           description: `${cashbackPercentage}% cashback (${deliveredCount} sales) for ${product.name}`,
           referenceId: product._id.toString(),
-          referenceType: 'cashback',
-          status: 'completed',
-          balance: designer.wallet.balance + cashbackAmount
+          referenceType: "cashback",
+          status: "completed",
+          balance: designer.wallet.balance + cashbackAmount,
         });
 
         designer.wallet.balance += cashbackAmount;
-        designer.cashbackReceived = (designer.cashbackReceived || 0) + cashbackAmount;
+        designer.cashbackReceived =
+          (designer.cashbackReceived || 0) + cashbackAmount;
         await designer.save();
 
-        console.log(`✅ Cashback added for product: ${product.name}, Amount: ₹${cashbackAmount}`);
+        console.log(
+          `✅ Cashback added for product: ${product.name}, Amount: ₹${cashbackAmount}`,
+        );
       }
     }
   } catch (error) {
-    console.error('processCashbackForOrder error:', error);
+    console.error("processCashbackForOrder error:", error);
   }
 };
 
 // Get order statistics (Admin)
 export const getOrderStatistics = async (req, res) => {
   try {
-    const { period = 'month' } = req.query;
+    const { period = "month" } = req.query;
 
     let dateFilter = {};
     const now = new Date();
 
-    if (period === 'day') {
+    if (period === "day") {
       const start = new Date(now);
       start.setHours(0, 0, 0, 0);
       const end = new Date(now);
       end.setHours(23, 59, 59, 999);
       dateFilter = { createdAt: { $gte: start, $lte: end } };
-    } else if (period === 'week') {
+    } else if (period === "week") {
       const start = new Date(now);
       start.setDate(now.getDate() - now.getDay());
       start.setHours(0, 0, 0, 0);
       dateFilter = { createdAt: { $gte: start } };
-    } else if (period === 'month') {
+    } else if (period === "month") {
       dateFilter = {
         createdAt: {
           $gte: new Date(now.getFullYear(), now.getMonth(), 1),
-          $lte: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999)
-        }
+          $lte: new Date(
+            now.getFullYear(),
+            now.getMonth() + 1,
+            0,
+            23,
+            59,
+            59,
+            999,
+          ),
+        },
       };
-    } else if (period === 'year') {
+    } else if (period === "year") {
       dateFilter = {
         createdAt: {
           $gte: new Date(now.getFullYear(), 0, 1),
-          $lte: new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999)
-        }
+          $lte: new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999),
+        },
       };
     }
 
@@ -3171,16 +3479,28 @@ export const getOrderStatistics = async (req, res) => {
         $group: {
           _id: null,
           totalOrders: { $sum: 1 },
-          totalRevenue: { $sum: '$finalAmount' },
-          averageOrderValue: { $avg: '$finalAmount' },
-          pendingOrders: { $sum: { $cond: [{ $eq: ['$orderStatus', 'pending'] }, 1, 0] } },
-          confirmedOrders: { $sum: { $cond: [{ $eq: ['$orderStatus', 'confirmed'] }, 1, 0] } },
-          processingOrders: { $sum: { $cond: [{ $eq: ['$orderStatus', 'processing'] }, 1, 0] } },
-          shippedOrders: { $sum: { $cond: [{ $eq: ['$orderStatus', 'shipped'] }, 1, 0] } },
-          deliveredOrders: { $sum: { $cond: [{ $eq: ['$orderStatus', 'delivered'] }, 1, 0] } },
-          cancelledOrders: { $sum: { $cond: [{ $eq: ['$orderStatus', 'cancelled'] }, 1, 0] } }
-        }
-      }
+          totalRevenue: { $sum: "$finalAmount" },
+          averageOrderValue: { $avg: "$finalAmount" },
+          pendingOrders: {
+            $sum: { $cond: [{ $eq: ["$orderStatus", "pending"] }, 1, 0] },
+          },
+          confirmedOrders: {
+            $sum: { $cond: [{ $eq: ["$orderStatus", "confirmed"] }, 1, 0] },
+          },
+          processingOrders: {
+            $sum: { $cond: [{ $eq: ["$orderStatus", "processing"] }, 1, 0] },
+          },
+          shippedOrders: {
+            $sum: { $cond: [{ $eq: ["$orderStatus", "shipped"] }, 1, 0] },
+          },
+          deliveredOrders: {
+            $sum: { $cond: [{ $eq: ["$orderStatus", "delivered"] }, 1, 0] },
+          },
+          cancelledOrders: {
+            $sum: { $cond: [{ $eq: ["$orderStatus", "cancelled"] }, 1, 0] },
+          },
+        },
+      },
     ]);
 
     // Daily sales for chart
@@ -3188,31 +3508,35 @@ export const getOrderStatistics = async (req, res) => {
       { $match: dateFilter },
       {
         $group: {
-          _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
           orders: { $sum: 1 },
-          revenue: { $sum: '$finalAmount' }
-        }
+          revenue: { $sum: "$finalAmount" },
+        },
       },
-      { $sort: { _id: 1 } }
+      { $sort: { _id: 1 } },
     ]);
 
     return res.status(200).json({
       success: true,
       period,
       stats: stats[0] || {
-        totalOrders: 0, totalRevenue: 0, averageOrderValue: 0,
-        pendingOrders: 0, confirmedOrders: 0, processingOrders: 0,
-        shippedOrders: 0, deliveredOrders: 0, cancelledOrders: 0
+        totalOrders: 0,
+        totalRevenue: 0,
+        averageOrderValue: 0,
+        pendingOrders: 0,
+        confirmedOrders: 0,
+        processingOrders: 0,
+        shippedOrders: 0,
+        deliveredOrders: 0,
+        cancelledOrders: 0,
       },
-      dailySales
+      dailySales,
     });
-
   } catch (error) {
-    console.error('getOrderStatistics error:', error);
+    console.error("getOrderStatistics error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
-
 
 // ==================== LOGIN SCREEN MEDIA CONTROLLERS ====================
 
@@ -3228,23 +3552,28 @@ export const uploadLoginScreenMedia = async (req, res) => {
     if (!file) {
       return res.status(400).json({
         success: false,
-        message: 'No file uploaded'
+        message: "No file uploaded",
       });
     }
 
-    const mediaType = file.mimetype.startsWith('image/') ? 'image' : 'video';
-    const folder = mediaType === 'image' ? 'login-screen/images' : 'login-screen/videos';
-    const urlFolder = mediaType === 'image' ? 'login-screen/images' : 'login-screen/videos';
+    const mediaType = file.mimetype.startsWith("image/") ? "image" : "video";
+    const folder =
+      mediaType === "image" ? "login-screen/images" : "login-screen/videos";
+    const urlFolder =
+      mediaType === "image" ? "login-screen/images" : "login-screen/videos";
 
     // Delete existing media from database and filesystem
     const existingMedia = await LoginScreenMedia.findOne();
-    
+
     if (existingMedia) {
       // Delete physical file
-      const oldFolder = existingMedia.type === 'image' ? 'login-screen/images' : 'login-screen/videos';
+      const oldFolder =
+        existingMedia.type === "image"
+          ? "login-screen/images"
+          : "login-screen/videos";
       const oldFilePath = `uploads/${oldFolder}/${existingMedia.filename}`;
       deleteFile(oldFilePath);
-      
+
       // Delete database record
       await LoginScreenMedia.deleteOne({ _id: existingMedia._id });
     }
@@ -3258,7 +3587,7 @@ export const uploadLoginScreenMedia = async (req, res) => {
     const newMedia = new LoginScreenMedia({
       type: mediaType,
       filename: file.filename,
-      url: getFileUrl(req, path.basename(file.path), urlFolder)
+      url: getFileUrl(req, path.basename(file.path), urlFolder),
     });
 
     await newMedia.save();
@@ -3269,16 +3598,14 @@ export const uploadLoginScreenMedia = async (req, res) => {
       data: {
         type: mediaType,
         url: newMedia.url,
-        filename: newMedia.filename
-      }
+        filename: newMedia.filename,
+      },
     });
-
   } catch (error) {
     if (req.file?.path) deleteFile(req.file.path);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
-
 
 /**
  * Delete current active media
@@ -3287,27 +3614,27 @@ export const uploadLoginScreenMedia = async (req, res) => {
 export const deleteLoginScreenMedia = async (req, res) => {
   try {
     const media = await LoginScreenMedia.findOne();
-    
+
     if (!media) {
       return res.status(404).json({
         success: false,
-        message: 'No media found'
+        message: "No media found",
       });
     }
 
     // Delete physical file
-    const folder = media.type === 'image' ? 'login-screen/images' : 'login-screen/videos';
+    const folder =
+      media.type === "image" ? "login-screen/images" : "login-screen/videos";
     const filePath = `uploads/${folder}/${media.filename}`;
     deleteFile(filePath);
-    
+
     // Delete database record
     await LoginScreenMedia.deleteOne({ _id: media._id });
 
     return res.status(200).json({
       success: true,
-      message: 'Login screen media deleted successfully'
+      message: "Login screen media deleted successfully",
     });
-
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -3320,22 +3647,22 @@ export const deleteLoginScreenMedia = async (req, res) => {
 export const checkLoginScreenMedia = async (req, res) => {
   try {
     const media = await LoginScreenMedia.findOne();
-    
+
     return res.status(200).json({
       success: true,
       exists: !!media,
-      data: media ? {
-        type: media.type,
-        url: media.url,
-        filename: media.filename
-      } : null
+      data: media
+        ? {
+            type: media.type,
+            url: media.url,
+            filename: media.filename,
+          }
+        : null,
     });
-
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
-
 
 // ==================== HERO SECTION CONTROLLERS ====================
 
@@ -3346,7 +3673,7 @@ const extractYouTubeId = (url) => {
     /(?:youtube\.com\/watch\?v=)([^&]+)/i,
     /(?:youtu\.be\/)([^?]+)/i,
     /(?:youtube\.com\/embed\/)([^?]+)/i,
-    /(?:youtube\.com\/shorts\/)([^?]+)/i
+    /(?:youtube\.com\/shorts\/)([^?]+)/i,
   ];
   for (const pattern of patterns) {
     const match = url.match(pattern);
@@ -3361,13 +3688,13 @@ const extractYouTubeId = (url) => {
  */
 export const addHeroSection = async (req, res) => {
   try {
-    const { type, order, url, redirectionLink  } = req.body;
+    const { type, order, url, redirectionLink } = req.body;
     const file = req.file;
 
-    if (!type || !['image', 'video', 'youtube'].includes(type)) {
+    if (!type || !["image", "video", "youtube"].includes(type)) {
       return res.status(400).json({
         success: false,
-        message: 'Type is required and must be "image", "video", or "youtube"'
+        message: 'Type is required and must be "image", "video", or "youtube"',
       });
     }
 
@@ -3375,30 +3702,32 @@ export const addHeroSection = async (req, res) => {
     let fileUrl = null;
 
     // Handle file upload for image/video
-    if (type === 'image' || type === 'video') {
+    if (type === "image" || type === "video") {
       if (!file) {
         return res.status(400).json({
           success: false,
-          message: 'File is required for image/video type'
+          message: "File is required for image/video type",
         });
       }
 
-      const folder = type === 'image' ? 'homepage/hero/images' : 'homepage/hero/videos';
-      const urlFolder = type === 'image' ? 'homepage/hero/images' : 'homepage/hero/videos';
-      
+      const folder =
+        type === "image" ? "homepage/hero/images" : "homepage/hero/videos";
+      const urlFolder =
+        type === "image" ? "homepage/hero/images" : "homepage/hero/videos";
+
       if (!fs.existsSync(`uploads/${folder}`)) {
         fs.mkdirSync(`uploads/${folder}`, { recursive: true });
       }
 
       filename = file.filename;
       fileUrl = getFileUrl(req, path.basename(file.path), urlFolder);
-    } 
+    }
     // Handle YouTube URL
-    else if (type === 'youtube') {
+    else if (type === "youtube") {
       if (!url) {
         return res.status(400).json({
           success: false,
-          message: 'URL is required for youtube type'
+          message: "URL is required for youtube type",
         });
       }
       fileUrl = url;
@@ -3414,18 +3743,17 @@ export const addHeroSection = async (req, res) => {
       filename,
       url: fileUrl,
       order: order !== undefined ? order : homePage.heroSections.length,
-      redirectionLink : redirectionLink || null,
-      isActive: true
+      redirectionLink: redirectionLink || null,
+      isActive: true,
     });
 
     await homePage.save();
 
     return res.status(201).json({
       success: true,
-      message: 'Hero section added successfully',
-      data: homePage.heroSections
+      message: "Hero section added successfully",
+      data: homePage.heroSections,
     });
-
   } catch (error) {
     if (req.file?.path) deleteFile(req.file.path);
     return res.status(500).json({ success: false, message: error.message });
@@ -3439,19 +3767,18 @@ export const addHeroSection = async (req, res) => {
 export const getHeroSections = async (req, res) => {
   try {
     const homePage = await HomePage.findOne();
-    
+
     if (!homePage) {
       return res.status(200).json({
         success: true,
-        data: []
+        data: [],
       });
     }
 
     return res.status(200).json({
       success: true,
-      data: homePage.heroSections.sort((a, b) => a.order - b.order)
+      data: homePage.heroSections.sort((a, b) => a.order - b.order),
     });
-
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -3469,7 +3796,7 @@ export const getHeroSectionById = async (req, res) => {
     if (!homePage) {
       return res.status(404).json({
         success: false,
-        message: 'Home page not found'
+        message: "Home page not found",
       });
     }
 
@@ -3477,15 +3804,14 @@ export const getHeroSectionById = async (req, res) => {
     if (!hero) {
       return res.status(404).json({
         success: false,
-        message: 'Hero section not found'
+        message: "Hero section not found",
       });
     }
 
     return res.status(200).json({
       success: true,
-      data: hero
+      data: hero,
     });
-
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -3498,44 +3824,53 @@ export const getHeroSectionById = async (req, res) => {
 export const updateHeroSection = async (req, res) => {
   try {
     const { heroId } = req.params;
-    const { type, order, isActive, url, redirectionLink  } = req.body;
+    const { type, order, isActive, url, redirectionLink } = req.body;
     const file = req.file;
 
     const homePage = await HomePage.findOne();
     if (!homePage) {
-      return res.status(404).json({ success: false, message: 'Home page not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Home page not found" });
     }
 
     const hero = homePage.heroSections.id(heroId);
     if (!hero) {
-      return res.status(404).json({ success: false, message: 'Hero section not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Hero section not found" });
     }
 
     if (type) hero.type = type;
     if (order !== undefined) hero.order = order;
-    if (isActive !== undefined) hero.isActive = isActive === 'true';
+    if (isActive !== undefined) hero.isActive = isActive === "true";
 
     if (redirectionLink !== undefined) {
       hero.redirectionLink = redirectionLink || null;
     }
 
     // Handle file update for image/video
-    if (file && (hero.type === 'image' || hero.type === 'video')) {
+    if (file && (hero.type === "image" || hero.type === "video")) {
       if (hero.filename) {
-        const oldFolder = hero.type === 'image' ? 'homepage/hero/images' : 'homepage/hero/videos';
+        const oldFolder =
+          hero.type === "image"
+            ? "homepage/hero/images"
+            : "homepage/hero/videos";
         const oldFilePath = `uploads/${oldFolder}/${hero.filename}`;
         deleteFile(oldFilePath);
       }
-      
-      const folder = hero.type === 'image' ? 'homepage/hero/images' : 'homepage/hero/videos';
-      const urlFolder = hero.type === 'image' ? 'homepage/hero/images' : 'homepage/hero/videos';
-      
+
+      const folder =
+        hero.type === "image" ? "homepage/hero/images" : "homepage/hero/videos";
+      const urlFolder =
+        hero.type === "image" ? "homepage/hero/images" : "homepage/hero/videos";
+
       hero.filename = file.filename;
       hero.url = getFileUrl(req, path.basename(file.path), urlFolder);
     }
-    
+
     // Handle URL update for youtube
-    if (hero.type === 'youtube' && url) {
+    if (hero.type === "youtube" && url) {
       hero.url = url;
     }
 
@@ -3543,10 +3878,9 @@ export const updateHeroSection = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Hero section updated successfully',
-      data: hero
+      message: "Hero section updated successfully",
+      data: hero,
     });
-
   } catch (error) {
     if (req.file?.path) deleteFile(req.file.path);
     return res.status(500).json({ success: false, message: error.message });
@@ -3563,16 +3897,21 @@ export const deleteHeroSection = async (req, res) => {
 
     const homePage = await HomePage.findOne();
     if (!homePage) {
-      return res.status(404).json({ success: false, message: 'Home page not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Home page not found" });
     }
 
     const hero = homePage.heroSections.id(heroId);
     if (!hero) {
-      return res.status(404).json({ success: false, message: 'Hero section not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Hero section not found" });
     }
 
     if (hero.filename) {
-      const folder = hero.type === 'image' ? 'homepage/hero/images' : 'homepage/hero/videos';
+      const folder =
+        hero.type === "image" ? "homepage/hero/images" : "homepage/hero/videos";
       const filePath = `uploads/${folder}/${hero.filename}`;
       deleteFile(filePath);
     }
@@ -3582,9 +3921,8 @@ export const deleteHeroSection = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Hero section deleted successfully'
+      message: "Hero section deleted successfully",
     });
-
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -3600,12 +3938,16 @@ export const toggleHeroSection = async (req, res) => {
 
     const homePage = await HomePage.findOne();
     if (!homePage) {
-      return res.status(404).json({ success: false, message: 'Home page not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Home page not found" });
     }
 
     const hero = homePage.heroSections.id(heroId);
     if (!hero) {
-      return res.status(404).json({ success: false, message: 'Hero section not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Hero section not found" });
     }
 
     hero.isActive = !hero.isActive;
@@ -3613,10 +3955,9 @@ export const toggleHeroSection = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: `Hero section ${hero.isActive ? 'activated' : 'deactivated'}`,
-      data: hero
+      message: `Hero section ${hero.isActive ? "activated" : "deactivated"}`,
+      data: hero,
     });
-
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -3630,17 +3971,18 @@ export const toggleHeroSection = async (req, res) => {
  */
 export const addBannerSection = async (req, res) => {
   try {
-    const { title, subtitle, tag, buttonText, order, redirectionLink } = req.body;
+    const { title, subtitle, tag, buttonText, order, redirectionLink } =
+      req.body;
     const file = req.file;
 
     if (!title || !file) {
       return res.status(400).json({
         success: false,
-        message: 'Title and image are required'
+        message: "Title and image are required",
       });
     }
 
-    const folder = 'homepage/banners';
+    const folder = "homepage/banners";
     if (!fs.existsSync(`uploads/${folder}`)) {
       fs.mkdirSync(`uploads/${folder}`, { recursive: true });
     }
@@ -3652,26 +3994,24 @@ export const addBannerSection = async (req, res) => {
       homePage = new HomePage({ heroSections: [], banners: [] });
     }
 
-
     homePage.banners.push({
       title,
-      subtitle: subtitle || '',
-      tag: tag || '',
-      buttonText: buttonText || 'Shop Now',
+      subtitle: subtitle || "",
+      tag: tag || "",
+      buttonText: buttonText || "Shop Now",
       image: imageUrl,
       redirectionLink: redirectionLink || null,
       order: order || homePage.banners.length,
-      isActive: true
+      isActive: true,
     });
 
     await homePage.save();
 
     return res.status(201).json({
       success: true,
-      message: 'Banner section added successfully',
-      data: homePage.banners
+      message: "Banner section added successfully",
+      data: homePage.banners,
     });
-
   } catch (error) {
     if (req.file?.path) deleteFile(req.file.path);
     return res.status(500).json({ success: false, message: error.message });
@@ -3685,19 +4025,18 @@ export const addBannerSection = async (req, res) => {
 export const getBannerSections = async (req, res) => {
   try {
     const homePage = await HomePage.findOne();
-    
+
     if (!homePage) {
       return res.status(200).json({
         success: true,
-        data: []
+        data: [],
       });
     }
 
     return res.status(200).json({
       success: true,
-      data: homePage.banners.sort((a, b) => a.order - b.order)
+      data: homePage.banners.sort((a, b) => a.order - b.order),
     });
-
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -3715,7 +4054,7 @@ export const getBannerSectionById = async (req, res) => {
     if (!homePage) {
       return res.status(404).json({
         success: false,
-        message: 'Home page not found'
+        message: "Home page not found",
       });
     }
 
@@ -3723,15 +4062,14 @@ export const getBannerSectionById = async (req, res) => {
     if (!banner) {
       return res.status(404).json({
         success: false,
-        message: 'Banner section not found'
+        message: "Banner section not found",
       });
     }
 
     return res.status(200).json({
       success: true,
-      data: banner
+      data: banner,
     });
-
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -3744,17 +4082,29 @@ export const getBannerSectionById = async (req, res) => {
 export const updateBannerSection = async (req, res) => {
   try {
     const { bannerId } = req.params;
-    const { title, subtitle, tag, buttonText, order,  redirectionLink, isActive } = req.body;
+    const {
+      title,
+      subtitle,
+      tag,
+      buttonText,
+      order,
+      redirectionLink,
+      isActive,
+    } = req.body;
     const file = req.file;
 
     const homePage = await HomePage.findOne();
     if (!homePage) {
-      return res.status(404).json({ success: false, message: 'Home page not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Home page not found" });
     }
 
     const banner = homePage.banners.id(bannerId);
     if (!banner) {
-      return res.status(404).json({ success: false, message: 'Banner section not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Banner section not found" });
     }
 
     if (title) banner.title = title;
@@ -3762,18 +4112,17 @@ export const updateBannerSection = async (req, res) => {
     if (tag !== undefined) banner.tag = tag;
     if (buttonText) banner.buttonText = buttonText;
     if (order !== undefined) banner.order = order;
-    if (isActive !== undefined) banner.isActive = isActive === 'true';
+    if (isActive !== undefined) banner.isActive = isActive === "true";
 
     if (redirectionLink !== undefined) {
       banner.redirectionLink = redirectionLink || null;
     }
 
-
     if (file) {
-      if (banner.image && !banner.image.startsWith('http')) {
+      if (banner.image && !banner.image.startsWith("http")) {
         deleteFile(banner.image);
       }
-      const folder = 'homepage/banners';
+      const folder = "homepage/banners";
       banner.image = getFileUrl(req, path.basename(file.path), folder);
     }
 
@@ -3781,10 +4130,9 @@ export const updateBannerSection = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Banner section updated successfully',
-      data: banner
+      message: "Banner section updated successfully",
+      data: banner,
     });
-
   } catch (error) {
     if (req.file?.path) deleteFile(req.file.path);
     return res.status(500).json({ success: false, message: error.message });
@@ -3801,15 +4149,19 @@ export const deleteBannerSection = async (req, res) => {
 
     const homePage = await HomePage.findOne();
     if (!homePage) {
-      return res.status(404).json({ success: false, message: 'Home page not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Home page not found" });
     }
 
     const banner = homePage.banners.id(bannerId);
     if (!banner) {
-      return res.status(404).json({ success: false, message: 'Banner section not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Banner section not found" });
     }
 
-    if (banner.image && !banner.image.startsWith('http')) {
+    if (banner.image && !banner.image.startsWith("http")) {
       deleteFile(banner.image);
     }
 
@@ -3818,9 +4170,8 @@ export const deleteBannerSection = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Banner section deleted successfully'
+      message: "Banner section deleted successfully",
     });
-
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -3836,12 +4187,16 @@ export const toggleBannerSection = async (req, res) => {
 
     const homePage = await HomePage.findOne();
     if (!homePage) {
-      return res.status(404).json({ success: false, message: 'Home page not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Home page not found" });
     }
 
     const banner = homePage.banners.id(bannerId);
     if (!banner) {
-      return res.status(404).json({ success: false, message: 'Banner section not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Banner section not found" });
     }
 
     banner.isActive = !banner.isActive;
@@ -3849,16 +4204,13 @@ export const toggleBannerSection = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: `Banner section ${banner.isActive ? 'activated' : 'deactivated'}`,
-      data: banner
+      message: `Banner section ${banner.isActive ? "activated" : "deactivated"}`,
+      data: banner,
     });
-
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
-
-
 
 // ==================== COLLECTION CRUD OPERATIONS ====================
 
@@ -3874,7 +4226,7 @@ export const createCollection = async (req, res) => {
     if (!file) {
       return res.status(400).json({
         success: false,
-        message: 'Image is required'
+        message: "Image is required",
       });
     }
 
@@ -3883,11 +4235,11 @@ export const createCollection = async (req, res) => {
     if (existingCollection) {
       return res.status(400).json({
         success: false,
-        message: 'Collection with this title already exists'
+        message: "Collection with this title already exists",
       });
     }
 
-    const imageUrl = getFileUrl(req, file.filename, 'collections');
+    const imageUrl = getFileUrl(req, file.filename, "collections");
 
     const collection = new Collection({
       title,
@@ -3896,21 +4248,20 @@ export const createCollection = async (req, res) => {
       image: imageUrl,
       order: order || 0,
       isActive: true,
-      products: []
+      products: [],
     });
 
     await collection.save();
 
     return res.status(201).json({
       success: true,
-      message: 'Collection created successfully',
-      data: collection
+      message: "Collection created successfully",
+      data: collection,
     });
-
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -3921,19 +4272,20 @@ export const createCollection = async (req, res) => {
  */
 export const getAllCollections = async (req, res) => {
   try {
-    const collections = await Collection.find()
-      .sort({ order: 1, createdAt: -1 });
+    const collections = await Collection.find().sort({
+      order: 1,
+      createdAt: -1,
+    });
 
     return res.status(200).json({
       success: true,
       count: collections.length,
-      data: collections
+      data: collections,
     });
-
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -3946,25 +4298,24 @@ export const getCollectionById = async (req, res) => {
   try {
     const { collectionId } = req.params;
 
-    const collection = await Collection.findById(collectionId)
-      .populate('products');
+    const collection =
+      await Collection.findById(collectionId).populate("products");
 
     if (!collection) {
       return res.status(404).json({
         success: false,
-        message: 'Collection not found'
+        message: "Collection not found",
       });
     }
 
     return res.status(200).json({
       success: true,
-      data: collection
+      data: collection,
     });
-
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -3983,7 +4334,7 @@ export const updateCollection = async (req, res) => {
     if (!collection) {
       return res.status(404).json({
         success: false,
-        message: 'Collection not found'
+        message: "Collection not found",
       });
     }
 
@@ -3992,23 +4343,23 @@ export const updateCollection = async (req, res) => {
     if (tag) collection.tag = tag;
     if (description) collection.description = description;
     if (file) {
-      collection.image = getFileUrl(req, file.filename, 'collections');
+      collection.image = getFileUrl(req, file.filename, "collections");
     }
     if (order !== undefined) collection.order = order;
-    if (isActive !== undefined) collection.isActive = isActive === 'true' || isActive === true;
+    if (isActive !== undefined)
+      collection.isActive = isActive === "true" || isActive === true;
 
     await collection.save();
 
     return res.status(200).json({
       success: true,
-      message: 'Collection updated successfully',
-      data: collection
+      message: "Collection updated successfully",
+      data: collection,
     });
-
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -4025,19 +4376,18 @@ export const deleteCollection = async (req, res) => {
     if (!collection) {
       return res.status(404).json({
         success: false,
-        message: 'Collection not found'
+        message: "Collection not found",
       });
     }
 
     return res.status(200).json({
       success: true,
-      message: 'Collection deleted successfully'
+      message: "Collection deleted successfully",
     });
-
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -4054,7 +4404,7 @@ export const toggleCollectionStatus = async (req, res) => {
     if (!collection) {
       return res.status(404).json({
         success: false,
-        message: 'Collection not found'
+        message: "Collection not found",
       });
     }
 
@@ -4063,14 +4413,13 @@ export const toggleCollectionStatus = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: `Collection ${collection.isActive ? 'activated' : 'deactivated'} successfully`,
-      data: collection
+      message: `Collection ${collection.isActive ? "activated" : "deactivated"} successfully`,
+      data: collection,
     });
-
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -4090,7 +4439,7 @@ export const addProductToCollection = async (req, res) => {
     if (!productId) {
       return res.status(400).json({
         success: false,
-        message: 'Product ID is required'
+        message: "Product ID is required",
       });
     }
 
@@ -4099,7 +4448,7 @@ export const addProductToCollection = async (req, res) => {
     if (!collection) {
       return res.status(404).json({
         success: false,
-        message: 'Collection not found'
+        message: "Collection not found",
       });
     }
 
@@ -4108,7 +4457,7 @@ export const addProductToCollection = async (req, res) => {
     if (!product) {
       return res.status(404).json({
         success: false,
-        message: 'Product not found'
+        message: "Product not found",
       });
     }
 
@@ -4116,7 +4465,7 @@ export const addProductToCollection = async (req, res) => {
     if (collection.products.includes(productId)) {
       return res.status(400).json({
         success: false,
-        message: 'Product already in this collection'
+        message: "Product already in this collection",
       });
     }
 
@@ -4124,19 +4473,18 @@ export const addProductToCollection = async (req, res) => {
     collection.products.push(productId);
     await collection.save();
 
-    const updatedCollection = await Collection.findById(collectionId)
-      .populate('products');
+    const updatedCollection =
+      await Collection.findById(collectionId).populate("products");
 
     return res.status(200).json({
       success: true,
-      message: 'Product added to collection successfully',
-      data: updatedCollection
+      message: "Product added to collection successfully",
+      data: updatedCollection,
     });
-
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -4153,29 +4501,28 @@ export const removeProductFromCollection = async (req, res) => {
     if (!collection) {
       return res.status(404).json({
         success: false,
-        message: 'Collection not found'
+        message: "Collection not found",
       });
     }
 
     // Remove product from collection
     collection.products = collection.products.filter(
-      id => id.toString() !== productId
+      (id) => id.toString() !== productId,
     );
     await collection.save();
 
-    const updatedCollection = await Collection.findById(collectionId)
-      .populate('products');
+    const updatedCollection =
+      await Collection.findById(collectionId).populate("products");
 
     return res.status(200).json({
       success: true,
-      message: 'Product removed from collection successfully',
-      data: updatedCollection
+      message: "Product removed from collection successfully",
+      data: updatedCollection,
     });
-
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -4188,26 +4535,25 @@ export const getCollectionProducts = async (req, res) => {
   try {
     const { collectionId } = req.params;
 
-    const collection = await Collection.findById(collectionId)
-      .populate('products');
+    const collection =
+      await Collection.findById(collectionId).populate("products");
 
     if (!collection) {
       return res.status(404).json({
         success: false,
-        message: 'Collection not found'
+        message: "Collection not found",
       });
     }
 
     return res.status(200).json({
       success: true,
       count: collection.products.length,
-      data: collection.products
+      data: collection.products,
     });
-
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -4225,7 +4571,7 @@ export const addMultipleProductsToCollection = async (req, res) => {
     if (!productIds || !Array.isArray(productIds) || productIds.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'Product IDs array is required'
+        message: "Product IDs array is required",
       });
     }
 
@@ -4233,7 +4579,7 @@ export const addMultipleProductsToCollection = async (req, res) => {
     if (!collection) {
       return res.status(404).json({
         success: false,
-        message: 'Collection not found'
+        message: "Collection not found",
       });
     }
 
@@ -4242,31 +4588,30 @@ export const addMultipleProductsToCollection = async (req, res) => {
     if (products.length !== productIds.length) {
       return res.status(400).json({
         success: false,
-        message: 'One or more products not found'
+        message: "One or more products not found",
       });
     }
 
     // Add only new products (avoid duplicates)
     const newProducts = productIds.filter(
-      id => !collection.products.includes(id)
+      (id) => !collection.products.includes(id),
     );
 
     collection.products.push(...newProducts);
     await collection.save();
 
-    const updatedCollection = await Collection.findById(collectionId)
-      .populate('products');
+    const updatedCollection =
+      await Collection.findById(collectionId).populate("products");
 
     return res.status(200).json({
       success: true,
       message: `${newProducts.length} products added to collection`,
-      data: updatedCollection
+      data: updatedCollection,
     });
-
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -4285,7 +4630,7 @@ export const addCollectionToHomepage = async (req, res) => {
     if (!collectionId) {
       return res.status(400).json({
         success: false,
-        message: 'Collection ID is required'
+        message: "Collection ID is required",
       });
     }
 
@@ -4294,7 +4639,7 @@ export const addCollectionToHomepage = async (req, res) => {
     if (!collection) {
       return res.status(404).json({
         success: false,
-        message: 'Collection not found'
+        message: "Collection not found",
       });
     }
 
@@ -4304,19 +4649,19 @@ export const addCollectionToHomepage = async (req, res) => {
       homepage = new HomePage({
         heroSections: [],
         banners: [],
-        homepageCollections: []
+        homepageCollections: [],
       });
     }
 
     // Check if collection already exists in homepage
     const alreadyExists = homepage.homepageCollections.some(
-      item => item.collectionId.toString() === collectionId
+      (item) => item.collectionId.toString() === collectionId,
     );
 
     if (alreadyExists) {
       return res.status(400).json({
         success: false,
-        message: 'Collection already added to homepage'
+        message: "Collection already added to homepage",
       });
     }
 
@@ -4324,31 +4669,29 @@ export const addCollectionToHomepage = async (req, res) => {
     homepage.homepageCollections.push({
       collectionId,
       order: order !== undefined ? order : homepage.homepageCollections.length,
-      isActive: true
+      isActive: true,
     });
 
     await homepage.save();
 
     // Populate the newly added collection
-    const updatedHomepage = await HomePage.findById(homepage._id)
-      .populate({
-        path: 'homepageCollections.collectionId',
-        populate: {
-          path: 'products',
-          model: 'Product'
-        }
-      });
+    const updatedHomepage = await HomePage.findById(homepage._id).populate({
+      path: "homepageCollections.collectionId",
+      populate: {
+        path: "products",
+        model: "Product",
+      },
+    });
 
     return res.status(200).json({
       success: true,
-      message: 'Collection added to homepage successfully',
-      data: updatedHomepage.homepageCollections
+      message: "Collection added to homepage successfully",
+      data: updatedHomepage.homepageCollections,
     });
-
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -4365,41 +4708,40 @@ export const removeCollectionFromHomepage = async (req, res) => {
     if (!homepage) {
       return res.status(404).json({
         success: false,
-        message: 'Homepage not found'
+        message: "Homepage not found",
       });
     }
 
     // Check if collection exists in homepage
     const exists = homepage.homepageCollections.some(
-      item => item.collectionId.toString() === collectionId
+      (item) => item.collectionId.toString() === collectionId,
     );
 
-    console.log('Homepage Collections:', homepage.homepageCollections);
-    console.log('Checking for Collection ID:', collectionId, 'Exists:', exists);
+    console.log("Homepage Collections:", homepage.homepageCollections);
+    console.log("Checking for Collection ID:", collectionId, "Exists:", exists);
 
     if (!exists) {
       return res.status(404).json({
         success: false,
-        message: 'Collection not found in homepage'
+        message: "Collection not found in homepage",
       });
     }
 
     // Remove collection from array
     homepage.homepageCollections = homepage.homepageCollections.filter(
-      item => item.collectionId.toString() !== collectionId
+      (item) => item.collectionId.toString() !== collectionId,
     );
 
     await homepage.save();
 
     return res.status(200).json({
       success: true,
-      message: 'Collection removed from homepage successfully'
+      message: "Collection removed from homepage successfully",
     });
-
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -4416,7 +4758,7 @@ export const reorderHomepageCollections = async (req, res) => {
     if (!collections || !Array.isArray(collections)) {
       return res.status(400).json({
         success: false,
-        message: 'Collections array is required'
+        message: "Collections array is required",
       });
     }
 
@@ -4424,14 +4766,14 @@ export const reorderHomepageCollections = async (req, res) => {
     if (!homepage) {
       return res.status(404).json({
         success: false,
-        message: 'Homepage not found'
+        message: "Homepage not found",
       });
     }
 
     // Update order for each collection
     collections.forEach(({ collectionId, order }) => {
       const collectionItem = homepage.homepageCollections.find(
-        item => item.collectionId.toString() === collectionId
+        (item) => item.collectionId.toString() === collectionId,
       );
       if (collectionItem) {
         collectionItem.order = order;
@@ -4444,25 +4786,23 @@ export const reorderHomepageCollections = async (req, res) => {
     await homepage.save();
 
     // Populate updated data
-    const updatedHomepage = await HomePage.findById(homepage._id)
-      .populate({
-        path: 'homepageCollections.collectionId',
-        populate: {
-          path: 'products',
-          model: 'Product'
-        }
-      });
+    const updatedHomepage = await HomePage.findById(homepage._id).populate({
+      path: "homepageCollections.collectionId",
+      populate: {
+        path: "products",
+        model: "Product",
+      },
+    });
 
     return res.status(200).json({
       success: true,
-      message: 'Collections reordered successfully',
-      data: updatedHomepage.homepageCollections
+      message: "Collections reordered successfully",
+      data: updatedHomepage.homepageCollections,
     });
-
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -4479,19 +4819,19 @@ export const toggleHomepageCollection = async (req, res) => {
     if (!homepage) {
       return res.status(404).json({
         success: false,
-        message: 'Homepage not found'
+        message: "Homepage not found",
       });
     }
 
     // Find the collection in array
     const collectionItem = homepage.homepageCollections.find(
-      item => item.collectionId.toString() === collectionId
+      (item) => item.collectionId.toString() === collectionId,
     );
 
     if (!collectionItem) {
       return res.status(404).json({
         success: false,
-        message: 'Collection not found in homepage'
+        message: "Collection not found in homepage",
       });
     }
 
@@ -4502,17 +4842,16 @@ export const toggleHomepageCollection = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: `Collection ${collectionItem.isActive ? 'activated' : 'deactivated'} on homepage`,
+      message: `Collection ${collectionItem.isActive ? "activated" : "deactivated"} on homepage`,
       data: {
         collectionId: collectionItem.collectionId,
-        isActive: collectionItem.isActive
-      }
+        isActive: collectionItem.isActive,
+      },
     });
-
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -4524,40 +4863,38 @@ export const toggleHomepageCollection = async (req, res) => {
 export const getHomepageCollections = async (req, res) => {
   try {
     const homepage = await HomePage.findOne();
-    
+
     if (!homepage || homepage.homepageCollections.length === 0) {
       return res.status(200).json({
         success: true,
         count: 0,
-        data: []
+        data: [],
       });
     }
 
     // Populate collection details with products
-    const populatedHomepage = await HomePage.findById(homepage._id)
-      .populate({
-        path: 'homepageCollections.collectionId',
-        populate: {
-          path: 'products',
-          model: 'Product'
-        }
-      });
+    const populatedHomepage = await HomePage.findById(homepage._id).populate({
+      path: "homepageCollections.collectionId",
+      populate: {
+        path: "products",
+        model: "Product",
+      },
+    });
 
     // Sort by order
     const sortedCollections = populatedHomepage.homepageCollections.sort(
-      (a, b) => a.order - b.order
+      (a, b) => a.order - b.order,
     );
 
     return res.status(200).json({
       success: true,
       count: sortedCollections.length,
-      data: sortedCollections
+      data: sortedCollections,
     });
-
   } catch (error) {
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -4572,49 +4909,53 @@ export const addRecommendedProducts = async (req, res) => {
     if (productId) {
       ids = [productId.toString().trim()]; // ✅ Trim spaces
     } else if (productIds && Array.isArray(productIds)) {
-      ids = productIds.map(id => id.toString().trim()); // ✅ Trim each ID
+      ids = productIds.map((id) => id.toString().trim()); // ✅ Trim each ID
     } else {
       return res.status(400).json({
         success: false,
-        message: 'Please provide either "productId" (single) or "productIds" array (multiple)'
+        message:
+          'Please provide either "productId" (single) or "productIds" array (multiple)',
       });
     }
 
     if (ids.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'At least one product ID is required'
+        message: "At least one product ID is required",
       });
     }
 
     const results = {
       added: [],
       failed: [],
-      skipped: []
+      skipped: [],
     };
 
     for (const id of ids) {
       if (!id) {
-        results.failed.push({ productId: id, reason: 'Product ID missing' });
+        results.failed.push({ productId: id, reason: "Product ID missing" });
         continue;
       }
 
       // ✅ Use lean() to avoid virtuals
       const product = await Product.findById(id).lean();
       if (!product) {
-        results.failed.push({ productId: id, reason: 'Product not found' });
+        results.failed.push({ productId: id, reason: "Product not found" });
         continue;
       }
 
       const existing = await RecommendedProduct.findOne({ productId: id });
       if (existing) {
-        results.skipped.push({ productId: id, reason: 'Already in recommended list' });
+        results.skipped.push({
+          productId: id,
+          reason: "Already in recommended list",
+        });
         continue;
       }
 
       const recommended = new RecommendedProduct({
         productId: id,
-        isActive: true
+        isActive: true,
       });
 
       await recommended.save();
@@ -4622,14 +4963,14 @@ export const addRecommendedProducts = async (req, res) => {
     }
 
     const isSingle = ids.length === 1;
-    let message = '';
+    let message = "";
     if (isSingle) {
       if (results.added.length === 1) {
-        message = 'Product added to recommended list';
+        message = "Product added to recommended list";
       } else if (results.skipped.length === 1) {
-        message = 'Product already in recommended list';
+        message = "Product already in recommended list";
       } else {
-        message = 'Failed to add product';
+        message = "Failed to add product";
       }
     } else {
       message = `${results.added.length} products added, ${results.skipped.length} skipped, ${results.failed.length} failed`;
@@ -4638,11 +4979,10 @@ export const addRecommendedProducts = async (req, res) => {
     return res.status(201).json({
       success: results.added.length > 0,
       message,
-      data: isSingle ? (results.added[0] || null) : results
+      data: isSingle ? results.added[0] || null : results,
     });
-
   } catch (error) {
-    console.error('addRecommendedProducts error:', error);
+    console.error("addRecommendedProducts error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -4663,37 +5003,40 @@ export const deleteRecommendedProducts = async (req, res) => {
         recommendedIds = [rec._id];
       }
     } else if (productIds && Array.isArray(productIds)) {
-      const recs = await RecommendedProduct.find({ productId: { $in: productIds } });
-      recommendedIds = recs.map(r => r._id);
+      const recs = await RecommendedProduct.find({
+        productId: { $in: productIds },
+      });
+      recommendedIds = recs.map((r) => r._id);
     } else {
       return res.status(400).json({
         success: false,
-        message: 'Please provide "id", "ids", "productId", or "productIds"'
+        message: 'Please provide "id", "ids", "productId", or "productIds"',
       });
     }
 
     if (recommendedIds.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'No valid recommended products found to delete'
+        message: "No valid recommended products found to delete",
       });
     }
 
-    const result = await RecommendedProduct.deleteMany({ _id: { $in: recommendedIds } });
+    const result = await RecommendedProduct.deleteMany({
+      _id: { $in: recommendedIds },
+    });
 
     const isSingle = recommendedIds.length === 1;
-    const message = isSingle 
-      ? 'Product removed from recommended list'
+    const message = isSingle
+      ? "Product removed from recommended list"
       : `${result.deletedCount} products removed from recommended list`;
 
     return res.status(200).json({
       success: true,
       message,
-      deletedCount: result.deletedCount
+      deletedCount: result.deletedCount,
     });
-
   } catch (error) {
-    console.error('deleteRecommendedProducts error:', error);
+    console.error("deleteRecommendedProducts error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -4704,24 +5047,27 @@ export const getRecommendedProducts = async (req, res) => {
 
     let query = {};
     if (isActive !== undefined) {
-      query.isActive = isActive === 'true';
+      query.isActive = isActive === "true";
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const recommended = await RecommendedProduct.find(query)
-      .populate('productId', 'name description displayPrice displayActualPrice maxDiscount mainImages variants averageRating')
+      .populate(
+        "productId",
+        "name description displayPrice displayActualPrice maxDiscount mainImages variants averageRating",
+      )
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
 
     const total = await RecommendedProduct.countDocuments(query);
 
-    const products = recommended.map(item => ({
+    const products = recommended.map((item) => ({
       _id: item._id,
       product: item.productId,
       isActive: item.isActive,
-      addedAt: item.createdAt
+      addedAt: item.createdAt,
     }));
 
     return res.status(200).json({
@@ -4730,24 +5076,23 @@ export const getRecommendedProducts = async (req, res) => {
       total,
       page: parseInt(page),
       pages: Math.ceil(total / parseInt(limit)),
-      data: products
+      data: products,
     });
-
   } catch (error) {
-    console.error('getRecommendedProducts error:', error);
+    console.error("getRecommendedProducts error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
 
 export const toggleRecommendedProduct = async (req, res) => {
   try {
-    const { id } = req.params;  
+    const { id } = req.params;
 
     const recommended = await RecommendedProduct.findById(id);
     if (!recommended) {
       return res.status(404).json({
         success: false,
-        message: 'Recommended product not found'
+        message: "Recommended product not found",
       });
     }
 
@@ -4756,18 +5101,16 @@ export const toggleRecommendedProduct = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: `Recommended product ${recommended.isActive ? 'activated' : 'deactivated'}`,
-      data: recommended
+      message: `Recommended product ${recommended.isActive ? "activated" : "deactivated"}`,
+      data: recommended,
     });
-
   } catch (error) {
-    console.error('toggleRecommendedProduct error:', error);
+    console.error("toggleRecommendedProduct error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
 
 // ==================== LATEST DESIGNS ====================
-
 
 export const addLatestDesigns = async (req, res) => {
   try {
@@ -4777,48 +5120,52 @@ export const addLatestDesigns = async (req, res) => {
     if (productId) {
       ids = [productId.toString().trim()];
     } else if (productIds && Array.isArray(productIds)) {
-      ids = productIds.map(id => id.toString().trim());
+      ids = productIds.map((id) => id.toString().trim());
     } else {
       return res.status(400).json({
         success: false,
-        message: 'Please provide either "productId" (single) or "productIds" array (multiple)'
+        message:
+          'Please provide either "productId" (single) or "productIds" array (multiple)',
       });
     }
 
     if (ids.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'At least one product ID is required'
+        message: "At least one product ID is required",
       });
     }
 
     const results = {
       added: [],
       failed: [],
-      skipped: []
+      skipped: [],
     };
 
     for (const id of ids) {
       if (!id) {
-        results.failed.push({ productId: id, reason: 'Product ID missing' });
+        results.failed.push({ productId: id, reason: "Product ID missing" });
         continue;
       }
 
       const product = await Product.findById(id).lean();
       if (!product) {
-        results.failed.push({ productId: id, reason: 'Product not found' });
+        results.failed.push({ productId: id, reason: "Product not found" });
         continue;
       }
 
       const existing = await LatestDesign.findOne({ productId: id });
       if (existing) {
-        results.skipped.push({ productId: id, reason: 'Already in latest design collection' });
+        results.skipped.push({
+          productId: id,
+          reason: "Already in latest design collection",
+        });
         continue;
       }
 
       const latestDesign = new LatestDesign({
         productId: id,
-        isActive: true
+        isActive: true,
       });
 
       await latestDesign.save();
@@ -4826,14 +5173,14 @@ export const addLatestDesigns = async (req, res) => {
     }
 
     const isSingle = ids.length === 1;
-    let message = '';
+    let message = "";
     if (isSingle) {
       if (results.added.length === 1) {
-        message = 'Product added to latest design collection';
+        message = "Product added to latest design collection";
       } else if (results.skipped.length === 1) {
-        message = 'Product already in latest design collection';
+        message = "Product already in latest design collection";
       } else {
-        message = 'Failed to add product';
+        message = "Failed to add product";
       }
     } else {
       message = `${results.added.length} products added, ${results.skipped.length} skipped, ${results.failed.length} failed`;
@@ -4842,11 +5189,10 @@ export const addLatestDesigns = async (req, res) => {
     return res.status(201).json({
       success: results.added.length > 0,
       message,
-      data: isSingle ? (results.added[0] || null) : results
+      data: isSingle ? results.added[0] || null : results,
     });
-
   } catch (error) {
-    console.error('addLatestDesigns error:', error);
+    console.error("addLatestDesigns error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -4867,37 +5213,40 @@ export const deleteLatestDesigns = async (req, res) => {
         latestDesignIds = [latestDesign._id];
       }
     } else if (productIds && Array.isArray(productIds)) {
-      const latestDesigns = await LatestDesign.find({ productId: { $in: productIds } });
-      latestDesignIds = latestDesigns.map(item => item._id);
+      const latestDesigns = await LatestDesign.find({
+        productId: { $in: productIds },
+      });
+      latestDesignIds = latestDesigns.map((item) => item._id);
     } else {
       return res.status(400).json({
         success: false,
-        message: 'Please provide "id", "ids", "productId", or "productIds"'
+        message: 'Please provide "id", "ids", "productId", or "productIds"',
       });
     }
 
     if (latestDesignIds.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'No valid latest design products found to delete'
+        message: "No valid latest design products found to delete",
       });
     }
 
-    const result = await LatestDesign.deleteMany({ _id: { $in: latestDesignIds } });
+    const result = await LatestDesign.deleteMany({
+      _id: { $in: latestDesignIds },
+    });
 
     const isSingle = latestDesignIds.length === 1;
-    const message = isSingle 
-      ? 'Product removed from latest design collection'
+    const message = isSingle
+      ? "Product removed from latest design collection"
       : `${result.deletedCount} products removed from latest design collection`;
 
     return res.status(200).json({
       success: true,
       message,
-      deletedCount: result.deletedCount
+      deletedCount: result.deletedCount,
     });
-
   } catch (error) {
-    console.error('deleteLatestDesigns error:', error);
+    console.error("deleteLatestDesigns error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -4908,15 +5257,16 @@ export const getLatestDesignsAdmin = async (req, res) => {
 
     let query = {};
     if (isActive !== undefined) {
-      query.isActive = isActive === 'true';
+      query.isActive = isActive === "true";
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const latestDesigns = await LatestDesign.find(query)
       .populate({
-        path: 'productId',
-        select: 'name description displayPrice displayActualPrice maxDiscount mainImages variants averageRating'
+        path: "productId",
+        select:
+          "name description displayPrice displayActualPrice maxDiscount mainImages variants averageRating",
       })
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -4924,11 +5274,11 @@ export const getLatestDesignsAdmin = async (req, res) => {
 
     const total = await LatestDesign.countDocuments(query);
 
-    const products = latestDesigns.map(item => ({
+    const products = latestDesigns.map((item) => ({
       _id: item._id,
       product: item.productId,
       isActive: item.isActive,
-      addedAt: item.createdAt
+      addedAt: item.createdAt,
     }));
 
     return res.status(200).json({
@@ -4937,11 +5287,10 @@ export const getLatestDesignsAdmin = async (req, res) => {
       total,
       page: parseInt(page),
       pages: Math.ceil(total / parseInt(limit)),
-      data: products
+      data: products,
     });
-
   } catch (error) {
-    console.error('getLatestDesignsAdmin error:', error);
+    console.error("getLatestDesignsAdmin error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -4954,7 +5303,7 @@ export const toggleLatestDesign = async (req, res) => {
     if (!latestDesign) {
       return res.status(404).json({
         success: false,
-        message: 'Latest design product not found'
+        message: "Latest design product not found",
       });
     }
 
@@ -4963,63 +5312,60 @@ export const toggleLatestDesign = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: `Latest design product ${latestDesign.isActive ? 'activated' : 'deactivated'}`,
-      data: latestDesign
+      message: `Latest design product ${latestDesign.isActive ? "activated" : "deactivated"}`,
+      data: latestDesign,
     });
-
   } catch (error) {
-    console.error('toggleLatestDesign error:', error);
+    console.error("toggleLatestDesign error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
 
-
 // ==================== UPCOMING COLLECTIONS ====================
-
 
 // Admin: Add collection to upcoming
 export const addUpcomingCollection = async (req, res) => {
   try {
     const { collectionId, goLiveDateTime } = req.body;
 
-    console.log('Request body:', req.body);
-    console.log('User from token:', req.user);
+    console.log("Request body:", req.body);
+    console.log("User from token:", req.user);
 
     if (!collectionId || !goLiveDateTime) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Collection ID and goLiveDateTime are required' 
+      return res.status(400).json({
+        success: false,
+        message: "Collection ID and goLiveDateTime are required",
       });
     }
 
     // Check if collection exists
     const collection = await Collection.findById(collectionId);
     if (!collection) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Collection not found' 
+      return res.status(404).json({
+        success: false,
+        message: "Collection not found",
       });
     }
 
     // Check if already added
-    const existing = await UpcomingCollection.findOne({ 
-      collectionId, 
-      isActive: true 
+    const existing = await UpcomingCollection.findOne({
+      collectionId,
+      isActive: true,
     });
-    
+
     if (existing) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Collection already in upcoming section' 
+      return res.status(400).json({
+        success: false,
+        message: "Collection already in upcoming section",
       });
     }
 
     // Create upcoming entry - handle createdBy safely
     const upcomingData = {
       collectionId,
-      goLiveDateTime: new Date(goLiveDateTime)
+      goLiveDateTime: new Date(goLiveDateTime),
     };
-    
+
     // Only add createdBy if user exists
     if (req.user && req.user.id) {
       upcomingData.createdBy = req.user.id;
@@ -5029,20 +5375,20 @@ export const addUpcomingCollection = async (req, res) => {
     await upcoming.save();
 
     // Populate collection details
-    const populated = await UpcomingCollection.findById(upcoming._id)
-      .populate('collectionId');
+    const populated = await UpcomingCollection.findById(upcoming._id).populate(
+      "collectionId",
+    );
 
     return res.status(201).json({
       success: true,
-      message: 'Collection added to upcoming section',
-      data: populated
+      message: "Collection added to upcoming section",
+      data: populated,
     });
-
   } catch (error) {
-    console.error('addUpcomingCollection error:', error);
-    return res.status(500).json({ 
-      success: false, 
-      message: error.message 
+    console.error("addUpcomingCollection error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
     });
   }
 };
@@ -5051,30 +5397,30 @@ export const addUpcomingCollection = async (req, res) => {
 export const getAllUpcomingCollections = async (req, res) => {
   try {
     const { status, page = 1, limit = 20 } = req.query;
-    
+
     let query = { isActive: true };
-    if (status === 'upcoming') {
+    if (status === "upcoming") {
       query.goLiveDateTime = { $gt: new Date() };
-    } else if (status === 'expired') {
+    } else if (status === "expired") {
       query.goLiveDateTime = { $lt: new Date() };
     }
-    
+
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    
+
     const upcoming = await UpcomingCollection.find(query)
-      .populate('collectionId')
-      .populate('createdBy', 'name email')
+      .populate("collectionId")
+      .populate("createdBy", "name email")
       .sort({ goLiveDateTime: 1 })
       .skip(skip)
       .limit(parseInt(limit));
-    
+
     const total = await UpcomingCollection.countDocuments(query);
-    
+
     // Add status to each item
     const now = new Date();
-    const dataWithStatus = upcoming.map(item => {
+    const dataWithStatus = upcoming.map((item) => {
       const obj = item.toObject();
-      obj.status = item.goLiveDateTime > now ? 'upcoming' : 'expired';
+      obj.status = item.goLiveDateTime > now ? "upcoming" : "expired";
       return obj;
     });
 
@@ -5084,14 +5430,13 @@ export const getAllUpcomingCollections = async (req, res) => {
       total,
       page: parseInt(page),
       pages: Math.ceil(total / parseInt(limit)),
-      data: dataWithStatus
+      data: dataWithStatus,
     });
-
   } catch (error) {
-    console.error('getAllUpcomingCollections error:', error);
-    return res.status(500).json({ 
-      success: false, 
-      message: error.message 
+    console.error("getAllUpcomingCollections error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
     });
   }
 };
@@ -5100,34 +5445,33 @@ export const getAllUpcomingCollections = async (req, res) => {
 export const getUpcomingCollectionById = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const upcoming = await UpcomingCollection.findById(id)
-      .populate('collectionId')
-      .populate('createdBy', 'name email');
-    
+      .populate("collectionId")
+      .populate("createdBy", "name email");
+
     if (!upcoming) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Upcoming collection not found' 
+      return res.status(404).json({
+        success: false,
+        message: "Upcoming collection not found",
       });
     }
-    
+
     const now = new Date();
-    const status = upcoming.goLiveDateTime > now ? 'upcoming' : 'expired';
-    
+    const status = upcoming.goLiveDateTime > now ? "upcoming" : "expired";
+
     return res.status(200).json({
       success: true,
       data: {
         ...upcoming.toObject(),
-        status
-      }
+        status,
+      },
     });
-    
   } catch (error) {
-    console.error('getUpcomingCollectionById error:', error);
-    return res.status(500).json({ 
-      success: false, 
-      message: error.message 
+    console.error("getUpcomingCollectionById error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
     });
   }
 };
@@ -5137,46 +5481,45 @@ export const updateUpcomingCollection = async (req, res) => {
   try {
     const { id } = req.params;
     const { collectionId, goLiveDateTime } = req.body;
-    
+
     const upcoming = await UpcomingCollection.findById(id);
     if (!upcoming) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Upcoming collection not found' 
+      return res.status(404).json({
+        success: false,
+        message: "Upcoming collection not found",
       });
     }
-    
+
     if (collectionId) {
       const collection = await Collection.findById(collectionId);
       if (!collection) {
-        return res.status(404).json({ 
-          success: false, 
-          message: 'Collection not found' 
+        return res.status(404).json({
+          success: false,
+          message: "Collection not found",
         });
       }
       upcoming.collectionId = collectionId;
     }
-    
+
     if (goLiveDateTime) {
       upcoming.goLiveDateTime = new Date(goLiveDateTime);
     }
-    
+
     await upcoming.save();
-    
-    const populated = await UpcomingCollection.findById(id)
-      .populate('collectionId');
-    
+
+    const populated =
+      await UpcomingCollection.findById(id).populate("collectionId");
+
     return res.status(200).json({
       success: true,
-      message: 'Upcoming collection updated successfully',
-      data: populated
+      message: "Upcoming collection updated successfully",
+      data: populated,
     });
-    
   } catch (error) {
-    console.error('updateUpcomingCollection error:', error);
-    return res.status(500).json({ 
-      success: false, 
-      message: error.message 
+    console.error("updateUpcomingCollection error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
     });
   }
 };
@@ -5185,29 +5528,27 @@ export const updateUpcomingCollection = async (req, res) => {
 export const removeUpcomingCollection = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const upcoming = await UpcomingCollection.findByIdAndDelete(id);
     if (!upcoming) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Upcoming collection not found' 
+      return res.status(404).json({
+        success: false,
+        message: "Upcoming collection not found",
       });
     }
-    
+
     return res.status(200).json({
       success: true,
-      message: 'Collection removed from upcoming section'
+      message: "Collection removed from upcoming section",
     });
-
   } catch (error) {
-    console.error('removeUpcomingCollection error:', error);
-    return res.status(500).json({ 
-      success: false, 
-      message: error.message 
+    console.error("removeUpcomingCollection error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message,
     });
   }
 };
-
 
 // ======================= Notification Label ====================
 
@@ -5216,22 +5557,26 @@ export const addNotifications = async (req, res) => {
   try {
     const { notifications } = req.body;
 
-    if (!notifications || !Array.isArray(notifications) || notifications.length === 0) {
+    if (
+      !notifications ||
+      !Array.isArray(notifications) ||
+      notifications.length === 0
+    ) {
       return res.status(400).json({
         success: false,
-        message: 'Notifications array is required'
+        message: "Notifications array is required",
       });
     }
 
     let notificationDoc = await NotificationLabel.findOne();
-    
+
     // Format notifications with text only (ID will be auto-generated)
-    const newNotifications = notifications.map(text => ({ text }));
-    
+    const newNotifications = notifications.map((text) => ({ text }));
+
     if (!notificationDoc) {
       notificationDoc = new NotificationLabel({
         notifications: newNotifications,
-        isActive: true
+        isActive: true,
       });
     } else {
       notificationDoc.notifications.push(...newNotifications);
@@ -5242,14 +5587,13 @@ export const addNotifications = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: `${notifications.length} notification(s) added successfully`,
-      data: notificationDoc
+      data: notificationDoc,
     });
-
   } catch (error) {
-    console.error('addNotifications error:', error);
+    console.error("addNotifications error:", error);
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -5258,15 +5602,15 @@ export const addNotifications = async (req, res) => {
 export const getAllNotificationsAdmin = async (req, res) => {
   try {
     const notificationDoc = await NotificationLabel.findOne();
-    
+
     if (!notificationDoc) {
       return res.status(200).json({
         success: true,
         data: {
           notifications: [],
           isActive: true,
-          count: 0
-        }
+          count: 0,
+        },
       });
     }
 
@@ -5277,15 +5621,14 @@ export const getAllNotificationsAdmin = async (req, res) => {
         isActive: notificationDoc.isActive,
         count: notificationDoc.notifications.length,
         createdAt: notificationDoc.createdAt,
-        updatedAt: notificationDoc.updatedAt
-      }
+        updatedAt: notificationDoc.updatedAt,
+      },
     });
-
   } catch (error) {
-    console.error('getAllNotificationsAdmin error:', error);
+    console.error("getAllNotificationsAdmin error:", error);
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -5299,28 +5642,28 @@ export const updateNotificationById = async (req, res) => {
     if (!text) {
       return res.status(400).json({
         success: false,
-        message: 'Notification text is required'
+        message: "Notification text is required",
       });
     }
 
     const notificationDoc = await NotificationLabel.findOne();
-    
+
     if (!notificationDoc) {
       return res.status(404).json({
         success: false,
-        message: 'No notifications found'
+        message: "No notifications found",
       });
     }
 
     // Find notification by _id
     const notification = notificationDoc.notifications.find(
-      n => n._id.toString() === id
+      (n) => n._id.toString() === id,
     );
 
     if (!notification) {
       return res.status(404).json({
         success: false,
-        message: 'Notification not found'
+        message: "Notification not found",
       });
     }
 
@@ -5330,20 +5673,19 @@ export const updateNotificationById = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Notification updated successfully',
+      message: "Notification updated successfully",
       data: {
         id: notification._id,
         oldText,
         newText: text,
-        notifications: notificationDoc.notifications
-      }
+        notifications: notificationDoc.notifications,
+      },
     });
-
   } catch (error) {
-    console.error('updateNotificationById error:', error);
+    console.error("updateNotificationById error:", error);
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -5354,23 +5696,23 @@ export const deleteNotificationById = async (req, res) => {
     const { id } = req.params;
 
     const notificationDoc = await NotificationLabel.findOne();
-    
+
     if (!notificationDoc) {
       return res.status(404).json({
         success: false,
-        message: 'No notifications found'
+        message: "No notifications found",
       });
     }
 
     // Find notification by _id
     const notificationIndex = notificationDoc.notifications.findIndex(
-      n => n._id.toString() === id
+      (n) => n._id.toString() === id,
     );
 
     if (notificationIndex === -1) {
       return res.status(404).json({
         success: false,
-        message: 'Notification not found'
+        message: "Notification not found",
       });
     }
 
@@ -5385,15 +5727,14 @@ export const deleteNotificationById = async (req, res) => {
         deletedId: id,
         deletedText: deleted.text,
         remainingCount: notificationDoc.notifications.length,
-        notifications: notificationDoc.notifications
-      }
+        notifications: notificationDoc.notifications,
+      },
     });
-
   } catch (error) {
-    console.error('deleteNotificationById error:', error);
+    console.error("deleteNotificationById error:", error);
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -5404,23 +5745,23 @@ export const toggleNotificationById = async (req, res) => {
     const { id } = req.params;
 
     const notificationDoc = await NotificationLabel.findOne();
-    
+
     if (!notificationDoc) {
       return res.status(404).json({
         success: false,
-        message: 'No notifications found'
+        message: "No notifications found",
       });
     }
 
     // Find notification by _id
     const notification = notificationDoc.notifications.find(
-      n => n._id.toString() === id
+      (n) => n._id.toString() === id,
     );
 
     if (!notification) {
       return res.status(404).json({
         success: false,
-        message: 'Notification not found'
+        message: "Notification not found",
       });
     }
 
@@ -5429,19 +5770,18 @@ export const toggleNotificationById = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: `Notification "${notification.text}" ${notification.isActive ? 'activated' : 'deactivated'}`,
+      message: `Notification "${notification.text}" ${notification.isActive ? "activated" : "deactivated"}`,
       data: {
         id: notification._id,
         text: notification.text,
-        isActive: notification.isActive
-      }
+        isActive: notification.isActive,
+      },
     });
-
   } catch (error) {
-    console.error('toggleNotificationById error:', error);
+    console.error("toggleNotificationById error:", error);
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -5450,11 +5790,11 @@ export const toggleNotificationById = async (req, res) => {
 export const toggleSection = async (req, res) => {
   try {
     let notificationDoc = await NotificationLabel.findOne();
-    
+
     if (!notificationDoc) {
       notificationDoc = new NotificationLabel({
         notifications: [],
-        isActive: true
+        isActive: true,
       });
     }
 
@@ -5463,19 +5803,18 @@ export const toggleSection = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: `Notifications section ${notificationDoc.isActive ? 'enabled' : 'disabled'}`,
+      message: `Notifications section ${notificationDoc.isActive ? "enabled" : "disabled"}`,
       data: {
         isActive: notificationDoc.isActive,
         notifications: notificationDoc.notifications,
-        count: notificationDoc.notifications.length
-      }
+        count: notificationDoc.notifications.length,
+      },
     });
-
   } catch (error) {
-    console.error('toggleSection error:', error);
+    console.error("toggleSection error:", error);
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -5484,11 +5823,11 @@ export const toggleSection = async (req, res) => {
 export const clearAllNotifications = async (req, res) => {
   try {
     const notificationDoc = await NotificationLabel.findOne();
-    
+
     if (!notificationDoc) {
       return res.status(404).json({
         success: false,
-        message: 'No notifications found'
+        message: "No notifications found",
       });
     }
 
@@ -5497,88 +5836,99 @@ export const clearAllNotifications = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'All notifications cleared successfully',
+      message: "All notifications cleared successfully",
       data: {
         notifications: [],
-        count: 0
-      }
+        count: 0,
+      },
     });
-
   } catch (error) {
-    console.error('clearAllNotifications error:', error);
+    console.error("clearAllNotifications error:", error);
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
-
 
 // ======================= Designer Products ====================
 
 // Get all designer products (with filters)
 export const getAllDesignerProducts = async (req, res) => {
   try {
-    const { 
-      status, 
-      page = 1, 
-      limit = 20, 
+    const {
+      status,
+      page = 1,
+      limit = 20,
       search,
       designerId,
-      sortBy = 'newest'
+      sortBy = "newest",
     } = req.query;
-    
-    let query = { createdBy: 'designer' };
-    
+
+    let query = { createdBy: "designer" };
+
     // Filter by approval status
-    if (status === 'pending') query.approvalStatus = 'pending';
-    if (status === 'approved') query.approvalStatus = 'approved';
-    if (status === 'rejected') query.approvalStatus = 'rejected';
-    if (status === 'active') query.isActive = true;
-    
+    if (status === "pending") query.approvalStatus = "pending";
+    if (status === "approved") query.approvalStatus = "approved";
+    if (status === "rejected") query.approvalStatus = "rejected";
+    if (status === "active") query.isActive = true;
+
     // Filter by specific designer
     if (designerId) {
       query.creatorId = designerId;
     }
-    
+
     // Search by product name
     if (search) {
-      query.name = { $regex: search, $options: 'i' };
+      query.name = { $regex: search, $options: "i" };
     }
-    
+
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    
+
     // Sorting
     let sort = {};
-    if (sortBy === 'newest') sort.createdAt = -1;
-    if (sortBy === 'oldest') sort.createdAt = 1;
-    if (sortBy === 'price_asc') sort.displayPrice = 1;
-    if (sortBy === 'price_desc') sort.displayPrice = -1;
-    
+    if (sortBy === "newest") sort.createdAt = -1;
+    if (sortBy === "oldest") sort.createdAt = 1;
+    if (sortBy === "price_asc") sort.displayPrice = 1;
+    if (sortBy === "price_desc") sort.displayPrice = -1;
+
     const products = await Product.find(query)
-      .populate('creatorId', 'name email mobile profileImage')
-      .populate('categoryId', 'name')
+      .populate("creatorId", "name email mobile profileImage")
+      .populate("categoryId", "name")
       .sort(sort)
       .skip(skip)
       .limit(parseInt(limit));
-    
+
     const total = await Product.countDocuments(query);
-    
+
     // Get statistics
     const stats = {
-      total: await Product.countDocuments({ createdBy: 'designer' }),
-      pending: await Product.countDocuments({ createdBy: 'designer', approvalStatus: 'pending' }),
-      approved: await Product.countDocuments({ createdBy: 'designer', approvalStatus: 'approved' }),
-      rejected: await Product.countDocuments({ createdBy: 'designer', approvalStatus: 'rejected' }),
-      active: await Product.countDocuments({ createdBy: 'designer', isActive: true })
+      total: await Product.countDocuments({ createdBy: "designer" }),
+      pending: await Product.countDocuments({
+        createdBy: "designer",
+        approvalStatus: "pending",
+      }),
+      approved: await Product.countDocuments({
+        createdBy: "designer",
+        approvalStatus: "approved",
+      }),
+      rejected: await Product.countDocuments({
+        createdBy: "designer",
+        approvalStatus: "rejected",
+      }),
+      active: await Product.countDocuments({
+        createdBy: "designer",
+        isActive: true,
+      }),
     };
-    
+
     // Transform products for response
-    const transformedProducts = products.map(product => {
+    const transformedProducts = products.map((product) => {
       const productObj = product.toObject();
       const firstVariant = productObj.variants?.[0];
-      const mainImage = firstVariant?.images?.[0] || productObj.mainImages?.[0] || null;
-      
+      const mainImage =
+        firstVariant?.images?.[0] || productObj.mainImages?.[0] || null;
+
       return {
         _id: productObj._id,
         name: productObj.name,
@@ -5594,10 +5944,10 @@ export const getAllDesignerProducts = async (req, res) => {
         category: productObj.categoryId,
         variantsCount: productObj.variants?.length || 0,
         createdAt: productObj.createdAt,
-        updatedAt: productObj.updatedAt
+        updatedAt: productObj.updatedAt,
       };
     });
-    
+
     return res.status(200).json({
       success: true,
       count: transformedProducts.length,
@@ -5605,11 +5955,10 @@ export const getAllDesignerProducts = async (req, res) => {
       page: parseInt(page),
       pages: Math.ceil(total / parseInt(limit)),
       stats,
-      products: transformedProducts
+      products: transformedProducts,
     });
-    
   } catch (error) {
-    console.error('getAllDesignerProducts error:', error);
+    console.error("getAllDesignerProducts error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -5618,43 +5967,50 @@ export const getAllDesignerProducts = async (req, res) => {
 export const getDesignerProductById = async (req, res) => {
   try {
     const { productId } = req.params;
-    
-    const product = await Product.findOne({ 
+
+    const product = await Product.findOne({
       _id: productId,
-      createdBy: 'designer'
+      createdBy: "designer",
     })
-      .populate('creatorId', 'name email mobile profileImage about brandName')
-      .populate('categoryId', 'name')
-      .populate('subcategoryId');
-    
+      .populate("creatorId", "name email mobile profileImage about brandName")
+      .populate("categoryId", "name")
+      .populate("subcategoryId");
+
     if (!product) {
       return res.status(404).json({
         success: false,
-        message: 'Designer product not found'
+        message: "Designer product not found",
       });
     }
-    
+
     return res.status(200).json({
       success: true,
-      product
+      product,
     });
-    
   } catch (error) {
-    console.error('getDesignerProductById error:', error);
+    console.error("getDesignerProductById error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
 
 export const getPendingDesignerProducts = async (req, res) => {
   try {
-    const { 
-      page = 1, limit = 20, search, designerId, categoryId, 
-      subcategoryId, minPrice, maxPrice, sortBy = 'newest', 
-      fromDate, toDate 
+    const {
+      page = 1,
+      limit = 20,
+      search,
+      designerId,
+      categoryId,
+      subcategoryId,
+      minPrice,
+      maxPrice,
+      sortBy = "newest",
+      fromDate,
+      toDate,
     } = req.query;
 
-    const query = { createdBy: 'designer', approvalStatus: 'pending' };
-    
+    const query = { createdBy: "designer", approvalStatus: "pending" };
+
     if (designerId) query.creatorId = designerId;
     if (categoryId) query.categoryId = categoryId;
     if (subcategoryId) query.subcategoryId = subcategoryId;
@@ -5670,9 +6026,9 @@ export const getPendingDesignerProducts = async (req, res) => {
     }
     if (search) {
       query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-        { tags: { $regex: search, $options: 'i' } }
+        { name: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } },
+        { tags: { $regex: search, $options: "i" } },
       ];
     }
 
@@ -5688,31 +6044,44 @@ export const getPendingDesignerProducts = async (req, res) => {
       price_asc: { displayPrice: 1 },
       price_desc: { displayPrice: -1 },
       waiting_asc: { createdAt: 1 },
-      waiting_desc: { createdAt: -1 }
+      waiting_desc: { createdAt: -1 },
     };
     const sort = sortMap[sortBy] || sortMap.newest;
 
     const [products, total] = await Promise.all([
       Product.find(query)
-        .populate('creatorId', 'name email mobile profileImage brandName isVerified')
-        .populate('categoryId', 'name')
+        .populate(
+          "creatorId",
+          "name email mobile profileImage brandName isVerified",
+        )
+        .populate("categoryId", "name")
         .sort(sort)
         .skip(skip)
         .limit(limitNum),
-      Product.countDocuments(query)
+      Product.countDocuments(query),
     ]);
 
-    const transformedProducts = products.map(p => {
+    const transformedProducts = products.map((p) => {
       const obj = p.toObject();
       const firstVariant = obj.variants?.[0];
-      const mainImage = firstVariant?.images?.[0] || obj.mainImages?.[0] || null;
-      const colors = [...new Set(obj.variants?.map(v => v.color) || [])];
+      const mainImage =
+        firstVariant?.images?.[0] || obj.mainImages?.[0] || null;
+      const colors = [...new Set(obj.variants?.map((v) => v.color) || [])];
       const sizes = [];
-      obj.variants?.forEach(v => v.sizes?.forEach(s => { if (!sizes.includes(s.size)) sizes.push(s.size); }));
+      obj.variants?.forEach((v) =>
+        v.sizes?.forEach((s) => {
+          if (!sizes.includes(s.size)) sizes.push(s.size);
+        }),
+      );
 
-      const waitingHours = Math.floor((Date.now() - new Date(obj.createdAt)) / (1000 * 60 * 60));
+      const waitingHours = Math.floor(
+        (Date.now() - new Date(obj.createdAt)) / (1000 * 60 * 60),
+      );
       const waitingDays = Math.floor(waitingHours / 24);
-      const waitingDisplay = waitingDays > 0 ? `${waitingDays} day${waitingDays > 1 ? 's' : ''}` : `${waitingHours} hour${waitingHours > 1 ? 's' : ''}`;
+      const waitingDisplay =
+        waitingDays > 0
+          ? `${waitingDays} day${waitingDays > 1 ? "s" : ""}`
+          : `${waitingHours} hour${waitingHours > 1 ? "s" : ""}`;
 
       return {
         _id: obj._id,
@@ -5732,42 +6101,66 @@ export const getPendingDesignerProducts = async (req, res) => {
         updatedAt: obj.updatedAt,
         waitingTime: waitingDisplay,
         waitingHours,
-        creator: obj.creatorId ? {
-          id: obj.creatorId._id,
-          name: obj.creatorId.name,
-          email: obj.creatorId.email,
-          mobile: obj.creatorId.mobile,
-          profileImage: obj.creatorId.profileImage,
-          brandName: obj.creatorId.brandName || obj.creatorId.name,
-          isVerified: obj.creatorId.isVerified || false
-        } : null,
-        category: obj.categoryId ? { id: obj.categoryId._id, name: obj.categoryId.name } : null,
+        creator: obj.creatorId
+          ? {
+              id: obj.creatorId._id,
+              name: obj.creatorId.name,
+              email: obj.creatorId.email,
+              mobile: obj.creatorId.mobile,
+              profileImage: obj.creatorId.profileImage,
+              brandName: obj.creatorId.brandName || obj.creatorId.name,
+              isVerified: obj.creatorId.isVerified || false,
+            }
+          : null,
+        category: obj.categoryId
+          ? { id: obj.categoryId._id, name: obj.categoryId.name }
+          : null,
         subcategoryName: obj.subcategoryName || null,
         subcategoryId: obj.subcategoryId || null,
         tags: obj.tags || [],
-        variants: obj.variants?.map(v => ({
-          color: v.color,
-          price: v.price,
-          discountPrice: v.discountPrice,
-          sizes: v.sizes?.map(s => s.size) || [],
-          imagesCount: v.images?.length || 0
-        })) || []
+        variants:
+          obj.variants?.map((v) => ({
+            color: v.color,
+            price: v.price,
+            discountPrice: v.discountPrice,
+            sizes: v.sizes?.map((s) => s.size) || [],
+            imagesCount: v.images?.length || 0,
+          })) || [],
       };
     });
 
     const stats = {
-      totalPending: await Product.countDocuments({ createdBy: 'designer', approvalStatus: 'pending' }),
-      totalDesigners: await User.countDocuments({ role: 'Designer' }),
-      designersWithPending: await Product.distinct('creatorId', { createdBy: 'designer', approvalStatus: 'pending' }).then(ids => ids.length),
-      oldestPending: await Product.findOne({ createdBy: 'designer', approvalStatus: 'pending' }).sort({ createdAt: 1 }).select('createdAt name'),
-      newestPending: await Product.findOne({ createdBy: 'designer', approvalStatus: 'pending' }).sort({ createdAt: -1 }).select('createdAt name'),
-      categoriesWithPending: await Product.distinct('categoryId', { createdBy: 'designer', approvalStatus: 'pending' }).then(ids => ids.length)
+      totalPending: await Product.countDocuments({
+        createdBy: "designer",
+        approvalStatus: "pending",
+      }),
+      totalDesigners: await User.countDocuments({ role: "Designer" }),
+      designersWithPending: await Product.distinct("creatorId", {
+        createdBy: "designer",
+        approvalStatus: "pending",
+      }).then((ids) => ids.length),
+      oldestPending: await Product.findOne({
+        createdBy: "designer",
+        approvalStatus: "pending",
+      })
+        .sort({ createdAt: 1 })
+        .select("createdAt name"),
+      newestPending: await Product.findOne({
+        createdBy: "designer",
+        approvalStatus: "pending",
+      })
+        .sort({ createdAt: -1 })
+        .select("createdAt name"),
+      categoriesWithPending: await Product.distinct("categoryId", {
+        createdBy: "designer",
+        approvalStatus: "pending",
+      }).then((ids) => ids.length),
     };
 
     let designerDetails = null;
     if (designerId) {
       designerDetails = await User.findById(designerId)
-        .select('name email mobile profileImage brandName isVerified')
+        .select("name email mobile profileImage brandName isVerified")
         .lean();
     }
 
@@ -5777,17 +6170,31 @@ export const getPendingDesignerProducts = async (req, res) => {
       total,
       page: pageNum,
       pages: Math.ceil(total / limitNum),
-      filters: { designerId: designerId || null, categoryId: categoryId || null, subcategoryId: subcategoryId || null, search: search || null, minPrice: minPrice || null, maxPrice: maxPrice || null, fromDate: fromDate || null, toDate: toDate || null, sortBy },
+      filters: {
+        designerId: designerId || null,
+        categoryId: categoryId || null,
+        subcategoryId: subcategoryId || null,
+        search: search || null,
+        minPrice: minPrice || null,
+        maxPrice: maxPrice || null,
+        fromDate: fromDate || null,
+        toDate: toDate || null,
+        sortBy,
+      },
       designer: designerDetails,
       stats: {
         ...stats,
-        oldestWaiting: stats.oldestPending ? Math.floor((Date.now() - new Date(stats.oldestPending.createdAt)) / (1000 * 60 * 60 * 24)) + ' days' : 'N/A'
+        oldestWaiting: stats.oldestPending
+          ? Math.floor(
+              (Date.now() - new Date(stats.oldestPending.createdAt)) /
+                (1000 * 60 * 60 * 24),
+            ) + " days"
+          : "N/A",
       },
-      products: transformedProducts
+      products: transformedProducts,
     });
-
   } catch (error) {
-    console.error('getPendingDesignerProducts error:', error);
+    console.error("getPendingDesignerProducts error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -5796,39 +6203,38 @@ export const getPendingDesignerProducts = async (req, res) => {
 export const bulkApproveProducts = async (req, res) => {
   try {
     const { productIds } = req.body;
-    
+
     if (!productIds || !Array.isArray(productIds) || productIds.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'Product IDs array is required'
+        message: "Product IDs array is required",
       });
     }
-    
+
     const result = await Product.updateMany(
-      { 
+      {
         _id: { $in: productIds },
-        createdBy: 'designer',
-        approvalStatus: { $ne: 'approved' }
+        createdBy: "designer",
+        approvalStatus: { $ne: "approved" },
       },
       {
         $set: {
-          approvalStatus: 'approved',
+          approvalStatus: "approved",
           isActive: true,
           rejectionReason: null,
           approvedAt: new Date(),
-          approvedBy: req.user.id
-        }
-      }
+          approvedBy: req.user.id,
+        },
+      },
     );
-    
+
     return res.status(200).json({
       success: true,
       message: `${result.modifiedCount} product(s) approved successfully`,
-      modifiedCount: result.modifiedCount
+      modifiedCount: result.modifiedCount,
     });
-    
   } catch (error) {
-    console.error('bulkApproveProducts error:', error);
+    console.error("bulkApproveProducts error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -5837,46 +6243,45 @@ export const bulkApproveProducts = async (req, res) => {
 export const bulkRejectProducts = async (req, res) => {
   try {
     const { productIds, rejectionReason } = req.body;
-    
+
     if (!productIds || !Array.isArray(productIds) || productIds.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'Product IDs array is required'
+        message: "Product IDs array is required",
       });
     }
-    
+
     if (!rejectionReason) {
       return res.status(400).json({
         success: false,
-        message: 'Rejection reason is required for bulk reject'
+        message: "Rejection reason is required for bulk reject",
       });
     }
-    
+
     const result = await Product.updateMany(
-      { 
+      {
         _id: { $in: productIds },
-        createdBy: 'designer',
-        approvalStatus: { $ne: 'approved' }
+        createdBy: "designer",
+        approvalStatus: { $ne: "approved" },
       },
       {
         $set: {
-          approvalStatus: 'rejected',
+          approvalStatus: "rejected",
           isActive: false,
           rejectionReason: rejectionReason,
           rejectedAt: new Date(),
-          rejectedBy: req.user.id
-        }
-      }
+          rejectedBy: req.user.id,
+        },
+      },
     );
-    
+
     return res.status(200).json({
       success: true,
       message: `${result.modifiedCount} product(s) rejected successfully`,
-      modifiedCount: result.modifiedCount
+      modifiedCount: result.modifiedCount,
     });
-    
   } catch (error) {
-    console.error('bulkRejectProducts error:', error);
+    console.error("bulkRejectProducts error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -5887,7 +6292,7 @@ export const bulkRejectProducts = async (req, res) => {
 //     const designers = await User.find({ role: 'Designer' })
 //       .select('_id name email mobile profileImage isActive createdAt')
 //       .sort({ createdAt: -1 });
-    
+
 //     // Get product counts for each designer
 //     const designersWithStats = await Promise.all(designers.map(async (designer) => {
 //       const productStats = {
@@ -5896,19 +6301,19 @@ export const bulkRejectProducts = async (req, res) => {
 //         approved: await Product.countDocuments({ creatorId: designer._id, approvalStatus: 'approved' }),
 //         rejected: await Product.countDocuments({ creatorId: designer._id, approvalStatus: 'rejected' })
 //       };
-      
+
 //       return {
 //         ...designer.toObject(),
 //         productStats
 //       };
 //     }));
-    
+
 //     return res.status(200).json({
 //       success: true,
 //       count: designersWithStats.length,
 //       designers: designersWithStats
 //     });
-    
+
 //   } catch (error) {
 //     console.error('getAllDesigners error:', error);
 //     return res.status(500).json({ success: false, message: error.message });
@@ -5917,24 +6322,30 @@ export const bulkRejectProducts = async (req, res) => {
 
 export const getAllDesigners = async (req, res) => {
   try {
-    const { status, page = 1, limit = 20, search, sortBy = 'newest' } = req.query;
+    const {
+      status,
+      page = 1,
+      limit = 20,
+      search,
+      sortBy = "newest",
+    } = req.query;
 
     // Build query
     const query = {};
-    
+
     // Filter by status
-    if (status === 'approved') query.isApproved = true;
-    else if (status === 'pending') query.isApproved = false;
-    else if (status === 'active') query.isActive = true;
-    else if (status === 'inactive') query.isActive = false;
+    if (status === "approved") query.isApproved = true;
+    else if (status === "pending") query.isApproved = false;
+    else if (status === "active") query.isActive = true;
+    else if (status === "inactive") query.isActive = false;
 
     // Search
     if (search) {
       query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { mobile: { $regex: search, $options: 'i' } },
-        { brandName: { $regex: search, $options: 'i' } }
+        { name: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { mobile: { $regex: search, $options: "i" } },
+        { brandName: { $regex: search, $options: "i" } },
       ];
     }
 
@@ -5946,22 +6357,22 @@ export const getAllDesigners = async (req, res) => {
     // Sorting
     let sort = {};
     switch (sortBy) {
-      case 'newest':
+      case "newest":
         sort.createdAt = -1;
         break;
-      case 'oldest':
+      case "oldest":
         sort.createdAt = 1;
         break;
-      case 'name_asc':
+      case "name_asc":
         sort.name = 1;
         break;
-      case 'name_desc':
+      case "name_desc":
         sort.name = -1;
         break;
-      case 'products_asc':
+      case "products_asc":
         sort.totalProductsAdded = 1;
         break;
-      case 'products_desc':
+      case "products_desc":
         sort.totalProductsAdded = -1;
         break;
       default:
@@ -5970,7 +6381,7 @@ export const getAllDesigners = async (req, res) => {
 
     // Get designers with all details
     const designers = await Designer.find(query)
-      .select('-otp -otpExpires -authToken -authTokenExpires')
+      .select("-otp -otpExpires -authToken -authTokenExpires")
       .sort(sort)
       .skip(skip)
       .limit(limitNum);
@@ -5978,127 +6389,141 @@ export const getAllDesigners = async (req, res) => {
     const total = await Designer.countDocuments(query);
 
     // Get stats for each designer
-    const designersWithStats = await Promise.all(designers.map(async (designer) => {
-      // Product statistics
-      const productStats = {
-        total: await Product.countDocuments({ 
-          creatorId: designer._id, 
-          createdBy: 'designer' 
-        }),
-        pending: await Product.countDocuments({ 
-          creatorId: designer._id, 
-          approvalStatus: 'pending' 
-        }),
-        approved: await Product.countDocuments({ 
-          creatorId: designer._id, 
-          approvalStatus: 'approved' 
-        }),
-        rejected: await Product.countDocuments({ 
-          creatorId: designer._id, 
-          approvalStatus: 'rejected' 
-        }),
-        active: await Product.countDocuments({ 
-          creatorId: designer._id, 
-          isActive: true 
-        })
-      };
+    const designersWithStats = await Promise.all(
+      designers.map(async (designer) => {
+        // Product statistics
+        const productStats = {
+          total: await Product.countDocuments({
+            creatorId: designer._id,
+            createdBy: "designer",
+          }),
+          pending: await Product.countDocuments({
+            creatorId: designer._id,
+            approvalStatus: "pending",
+          }),
+          approved: await Product.countDocuments({
+            creatorId: designer._id,
+            approvalStatus: "approved",
+          }),
+          rejected: await Product.countDocuments({
+            creatorId: designer._id,
+            approvalStatus: "rejected",
+          }),
+          active: await Product.countDocuments({
+            creatorId: designer._id,
+            isActive: true,
+          }),
+        };
 
-      // Get designer's products for order calculation
-      const designerProducts = await Product.find({ 
-        creatorId: designer._id 
-      }).select('_id');
-      const productIds = designerProducts.map(p => p._id);
+        // Get designer's products for order calculation
+        const designerProducts = await Product.find({
+          creatorId: designer._id,
+        }).select("_id");
+        const productIds = designerProducts.map((p) => p._id);
 
-      // Get orders containing designer's products
-      const orders = await Order.find({
-        'items.productId': { $in: productIds }
-      });
-
-      // Calculate sales
-      let totalSales = 0;
-      let totalOrders = orders.length;
-      let totalItemsSold = 0;
-
-      orders.forEach(order => {
-        order.items.forEach(item => {
-          if (productIds.some(id => id.toString() === item.productId.toString())) {
-            totalSales += item.price * item.quantity;
-            totalItemsSold += item.quantity;
-          }
+        // Get orders containing designer's products
+        const orders = await Order.find({
+          "items.productId": { $in: productIds },
         });
-      });
 
-      // Get wallet transactions
-      const transactions = designer.wallet?.transactions || [];
-      const totalCredits = transactions
-        .filter(t => t.type === 'credit' || t.type === 'refund' || t.type === 'cashback')
-        .reduce((sum, t) => sum + t.amount, 0);
-      
-      const totalDebits = transactions
-        .filter(t => t.type === 'debit')
-        .reduce((sum, t) => sum + t.amount, 0);
+        // Calculate sales
+        let totalSales = 0;
+        let totalOrders = orders.length;
+        let totalItemsSold = 0;
 
-      // Get recent transactions (last 5)
-      const recentTransactions = [...transactions]
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-        .slice(0, 5);
+        orders.forEach((order) => {
+          order.items.forEach((item) => {
+            if (
+              productIds.some(
+                (id) => id.toString() === item.productId.toString(),
+              )
+            ) {
+              totalSales += item.price * item.quantity;
+              totalItemsSold += item.quantity;
+            }
+          });
+        });
 
-      // Get recent products (last 5)
-      const recentProducts = await Product.find({ 
-        creatorId: designer._id,
-        createdBy: 'designer' 
-      })
-        .sort({ createdAt: -1 })
-        .limit(5)
-        .select('name displayPrice approvalStatus isActive createdAt');
+        // Get wallet transactions
+        const transactions = designer.wallet?.transactions || [];
+        const totalCredits = transactions
+          .filter(
+            (t) =>
+              t.type === "credit" ||
+              t.type === "refund" ||
+              t.type === "cashback",
+          )
+          .reduce((sum, t) => sum + t.amount, 0);
 
-      return {
-        _id: designer._id,
-        name: designer.name,
-        email: designer.email,
-        mobile: designer.mobile,
-        brandName: designer.brandName,
-        about: designer.about,
-        profileImage: designer.profileImage,
-        isVerified: designer.isVerified,
-        isActive: designer.isActive,
-        isApproved: designer.isApproved,
-        rejectionReason: designer.rejectionReason,
-        createdAt: designer.createdAt,
-        updatedAt: designer.updatedAt,
-        
-        // Product Stats
-        productStats,
-        totalProductsAdded: designer.totalProductsAdded || 0,
-        totalProductsSold: designer.totalProductsSold || 0,
-        
-        // Wallet
-        wallet: {
-          balance: designer.wallet?.balance || 0,
-          isActive: designer.wallet?.isActive !== undefined ? designer.wallet.isActive : true,
-          totalCredits,
-          totalDebits,
-          netBalance: totalCredits - totalDebits,
-          transactionCount: transactions.length,
-          recentTransactions: recentTransactions,
-          productFeePaid: designer.productFeePaid || 0,
-          cashbackReceived: designer.cashbackReceived || 0
-        },
-        
-        // Sales
-        sales: {
-          totalOrders,
-          totalItemsSold,
-          totalSales
-        },
-        
-        // Recent Products
-        recentProducts,
-        
-        // Status
-        status: designer.isApproved ? 'approved' : 'pending'
-      };
-    }));
+        const totalDebits = transactions
+          .filter((t) => t.type === "debit")
+          .reduce((sum, t) => sum + t.amount, 0);
+
+        // Get recent transactions (last 5)
+        const recentTransactions = [...transactions]
+          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+          .slice(0, 5);
+
+        // Get recent products (last 5)
+        const recentProducts = await Product.find({
+          creatorId: designer._id,
+          createdBy: "designer",
+        })
+          .sort({ createdAt: -1 })
+          .limit(5)
+          .select("name displayPrice approvalStatus isActive createdAt");
+
+        return {
+          _id: designer._id,
+          name: designer.name,
+          email: designer.email,
+          mobile: designer.mobile,
+          brandName: designer.brandName,
+          about: designer.about,
+          profileImage: designer.profileImage,
+          isVerified: designer.isVerified,
+          isActive: designer.isActive,
+          isApproved: designer.isApproved,
+          rejectionReason: designer.rejectionReason,
+          createdAt: designer.createdAt,
+          updatedAt: designer.updatedAt,
+
+          // Product Stats
+          productStats,
+          totalProductsAdded: designer.totalProductsAdded || 0,
+          totalProductsSold: designer.totalProductsSold || 0,
+
+          // Wallet
+          wallet: {
+            balance: designer.wallet?.balance || 0,
+            isActive:
+              designer.wallet?.isActive !== undefined
+                ? designer.wallet.isActive
+                : true,
+            totalCredits,
+            totalDebits,
+            netBalance: totalCredits - totalDebits,
+            transactionCount: transactions.length,
+            recentTransactions: recentTransactions,
+            productFeePaid: designer.productFeePaid || 0,
+            cashbackReceived: designer.cashbackReceived || 0,
+          },
+
+          // Sales
+          sales: {
+            totalOrders,
+            totalItemsSold,
+            totalSales,
+          },
+
+          // Recent Products
+          recentProducts,
+
+          // Status
+          status: designer.isApproved ? "approved" : "pending",
+        };
+      }),
+    );
 
     // Get overall statistics
     const overallStats = {
@@ -6106,10 +6531,12 @@ export const getAllDesigners = async (req, res) => {
       pendingApproval: await Designer.countDocuments({ isApproved: false }),
       approved: await Designer.countDocuments({ isApproved: true }),
       active: await Designer.countDocuments({ isActive: true }),
-      totalProducts: await Product.countDocuments({ createdBy: 'designer' }),
+      totalProducts: await Product.countDocuments({ createdBy: "designer" }),
       totalSales: await Order.countDocuments({
-        'items.productId': { $in: await Product.find({ createdBy: 'designer' }).distinct('_id') }
-      })
+        "items.productId": {
+          $in: await Product.find({ createdBy: "designer" }).distinct("_id"),
+        },
+      }),
     };
 
     return res.status(200).json({
@@ -6119,11 +6546,10 @@ export const getAllDesigners = async (req, res) => {
       page: pageNum,
       pages: Math.ceil(total / limitNum),
       stats: overallStats,
-      designers: designersWithStats
+      designers: designersWithStats,
     });
-
   } catch (error) {
-    console.error('getAllDesigners error:', error);
+    console.error("getAllDesigners error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -6135,13 +6561,13 @@ export const getPendingDesigners = async (req, res) => {
     const { page = 1, limit = 20, search } = req.query;
 
     const query = { isApproved: false };
-    
+
     if (search) {
       query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { mobile: { $regex: search, $options: 'i' } },
-        { brandName: { $regex: search, $options: 'i' } }
+        { name: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { mobile: { $regex: search, $options: "i" } },
+        { brandName: { $regex: search, $options: "i" } },
       ];
     }
 
@@ -6150,7 +6576,7 @@ export const getPendingDesigners = async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
 
     const designers = await Designer.find(query)
-      .select('-otp -otpExpires -authToken -authTokenExpires')
+      .select("-otp -otpExpires -authToken -authTokenExpires")
       .sort({ createdAt: 1 }) // Oldest first (waiting longest)
       .skip(skip)
       .limit(limitNum);
@@ -6158,48 +6584,52 @@ export const getPendingDesigners = async (req, res) => {
     const total = await Designer.countDocuments(query);
 
     // Get stats for each pending designer
-    const designersWithStats = await Promise.all(designers.map(async (designer) => {
-      const productStats = {
-        total: await Product.countDocuments({ 
-          creatorId: designer._id, 
-          createdBy: 'designer' 
-        }),
-        pending: await Product.countDocuments({ 
-          creatorId: designer._id, 
-          approvalStatus: 'pending' 
-        }),
-        approved: await Product.countDocuments({ 
-          creatorId: designer._id, 
-          approvalStatus: 'approved' 
-        }),
-        rejected: await Product.countDocuments({ 
-          creatorId: designer._id, 
-          approvalStatus: 'rejected' 
-        })
-      };
+    const designersWithStats = await Promise.all(
+      designers.map(async (designer) => {
+        const productStats = {
+          total: await Product.countDocuments({
+            creatorId: designer._id,
+            createdBy: "designer",
+          }),
+          pending: await Product.countDocuments({
+            creatorId: designer._id,
+            approvalStatus: "pending",
+          }),
+          approved: await Product.countDocuments({
+            creatorId: designer._id,
+            approvalStatus: "approved",
+          }),
+          rejected: await Product.countDocuments({
+            creatorId: designer._id,
+            approvalStatus: "rejected",
+          }),
+        };
 
-      // Calculate waiting time
-      const waitingDays = Math.floor((Date.now() - new Date(designer.createdAt)) / (1000 * 60 * 60 * 24));
+        // Calculate waiting time
+        const waitingDays = Math.floor(
+          (Date.now() - new Date(designer.createdAt)) / (1000 * 60 * 60 * 24),
+        );
 
-      return {
-        _id: designer._id,
-        name: designer.name,
-        email: designer.email,
-        mobile: designer.mobile,
-        brandName: designer.brandName,
-        about: designer.about,
-        profileImage: designer.profileImage,
-        isVerified: designer.isVerified,
-        isActive: designer.isActive,
-        isApproved: designer.isApproved,
-        rejectionReason: designer.rejectionReason,
-        createdAt: designer.createdAt,
-        updatedAt: designer.updatedAt,
-        waitingDays,
-        productStats,
-        walletBalance: designer.wallet?.balance || 0
-      };
-    }));
+        return {
+          _id: designer._id,
+          name: designer.name,
+          email: designer.email,
+          mobile: designer.mobile,
+          brandName: designer.brandName,
+          about: designer.about,
+          profileImage: designer.profileImage,
+          isVerified: designer.isVerified,
+          isActive: designer.isActive,
+          isApproved: designer.isApproved,
+          rejectionReason: designer.rejectionReason,
+          createdAt: designer.createdAt,
+          updatedAt: designer.updatedAt,
+          waitingDays,
+          productStats,
+          walletBalance: designer.wallet?.balance || 0,
+        };
+      }),
+    );
 
     return res.status(200).json({
       success: true,
@@ -6207,11 +6637,10 @@ export const getPendingDesigners = async (req, res) => {
       total,
       page: pageNum,
       pages: Math.ceil(total / limitNum),
-      pendingDesigners: designersWithStats
+      pendingDesigners: designersWithStats,
     });
-
   } catch (error) {
-    console.error('getPendingDesigners error:', error);
+    console.error("getPendingDesigners error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -6220,21 +6649,21 @@ export const getPendingDesigners = async (req, res) => {
 export const getDesignerSettings = async (req, res) => {
   try {
     let settings = await DesignerSettings.findOne();
-    
+
     if (!settings) {
       settings = await DesignerSettings.create({
         productFee: 500,
         cashbackPercentage: 60,
-        salesThresholdForCashback: 100
+        salesThresholdForCashback: 100,
       });
     }
 
     return res.status(200).json({
       success: true,
-      data: settings
+      data: settings,
     });
   } catch (error) {
-    console.error('getDesignerSettings error:', error);
+    console.error("getDesignerSettings error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -6242,37 +6671,40 @@ export const getDesignerSettings = async (req, res) => {
 export const updateDesignerSettings = async (req, res) => {
   try {
     // Check if user is admin
-    if (req.user.role !== 'admin') {
+    if (req.user.role !== "admin") {
       return res.status(403).json({
         success: false,
-        message: 'Access denied. Only admin can update designer settings.'
+        message: "Access denied. Only admin can update designer settings.",
       });
     }
 
-    const { productFee, cashbackPercentage, salesThresholdForCashback } = req.body;
-    
+    const { productFee, cashbackPercentage, salesThresholdForCashback } =
+      req.body;
+
     let settings = await DesignerSettings.findOne();
-    
+
     if (!settings) {
       settings = new DesignerSettings();
     }
 
     if (productFee !== undefined) settings.productFee = productFee;
-    if (cashbackPercentage !== undefined) settings.cashbackPercentage = cashbackPercentage;
-    if (salesThresholdForCashback !== undefined) settings.salesThresholdForCashback = salesThresholdForCashback;
-    
+    if (cashbackPercentage !== undefined)
+      settings.cashbackPercentage = cashbackPercentage;
+    if (salesThresholdForCashback !== undefined)
+      settings.salesThresholdForCashback = salesThresholdForCashback;
+
     settings.updatedBy = req.user.id;
     settings.updatedAt = new Date();
-    
+
     await settings.save();
 
     return res.status(200).json({
       success: true,
-      message: 'Designer settings updated successfully',
-      data: settings
+      message: "Designer settings updated successfully",
+      data: settings,
     });
   } catch (error) {
-    console.error('updateDesignerSettings error:', error);
+    console.error("updateDesignerSettings error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -6284,11 +6716,15 @@ export const approveDesigner = async (req, res) => {
 
     const designer = await Designer.findById(designerId);
     if (!designer) {
-      return res.status(404).json({ success: false, message: 'Designer not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Designer not found" });
     }
 
     if (designer.isApproved) {
-      return res.status(400).json({ success: false, message: 'Designer is already approved' });
+      return res
+        .status(400)
+        .json({ success: false, message: "Designer is already approved" });
     }
 
     designer.isApproved = true;
@@ -6297,16 +6733,14 @@ export const approveDesigner = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Designer approved successfully',
-      data: designer
+      message: "Designer approved successfully",
+      data: designer,
     });
-
   } catch (error) {
-    console.error('approveDesigner error:', error);
+    console.error("approveDesigner error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
-
 
 // Reject designer
 export const rejectDesigner = async (req, res) => {
@@ -6315,12 +6749,16 @@ export const rejectDesigner = async (req, res) => {
     const { rejectionReason } = req.body;
 
     if (!rejectionReason) {
-      return res.status(400).json({ success: false, message: 'Rejection reason is required' });
+      return res
+        .status(400)
+        .json({ success: false, message: "Rejection reason is required" });
     }
 
     const designer = await Designer.findById(designerId);
     if (!designer) {
-      return res.status(404).json({ success: false, message: 'Designer not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Designer not found" });
     }
 
     designer.isApproved = false;
@@ -6329,12 +6767,11 @@ export const rejectDesigner = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Designer rejected successfully',
-      data: designer
+      message: "Designer rejected successfully",
+      data: designer,
     });
-
   } catch (error) {
-    console.error('rejectDesigner error:', error);
+    console.error("rejectDesigner error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -6351,7 +6788,7 @@ export const rejectDesigner = async (req, res) => {
 //       return res.status(404).json({ success: false, message: 'Designer not found' });
 //     }
 
-//     const products = await Product.find({ 
+//     const products = await Product.find({
 //       creatorId: designerId,
 //       createdBy: 'designer'
 //     }).sort({ createdAt: -1 });
@@ -6384,43 +6821,49 @@ export const getDesignerDetails = async (req, res) => {
   try {
     const { designerId } = req.params;
 
-    const designer = await Designer.findById(designerId)
-      .select('-otp -otpExpires -authToken -authTokenExpires');
+    const designer = await Designer.findById(designerId).select(
+      "-otp -otpExpires -authToken -authTokenExpires",
+    );
 
     if (!designer) {
-      return res.status(404).json({ success: false, message: 'Designer not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Designer not found" });
     }
 
     // ==================== PRODUCTS WITH DETAILS ====================
-    const products = await Product.find({ 
+    const products = await Product.find({
       creatorId: designerId,
-      createdBy: 'designer'
+      createdBy: "designer",
     }).sort({ createdAt: -1 });
 
     // Product statistics
     const stats = {
       totalProducts: products.length,
-      pending: products.filter(p => p.approvalStatus === 'pending').length,
-      approved: products.filter(p => p.approvalStatus === 'approved').length,
-      rejected: products.filter(p => p.approvalStatus === 'rejected').length,
-      active: products.filter(p => p.isActive === true).length
+      pending: products.filter((p) => p.approvalStatus === "pending").length,
+      approved: products.filter((p) => p.approvalStatus === "approved").length,
+      rejected: products.filter((p) => p.approvalStatus === "rejected").length,
+      active: products.filter((p) => p.isActive === true).length,
     };
 
     // Transform products with main images
-    const transformedProducts = products.map(product => {
+    const transformedProducts = products.map((product) => {
       const productObj = product.toObject();
-      
+
       // Get main image from first variant
       const firstVariant = productObj.variants?.[0];
-      const mainImage = firstVariant?.images?.[0] || productObj.mainImages?.[0] || null;
-      
+      const mainImage =
+        firstVariant?.images?.[0] || productObj.mainImages?.[0] || null;
+
       // Extract all colors from variants
-      const colors = [...new Set(productObj.variants?.map(v => v.color) || [])];
-      
+      const colors = [
+        ...new Set(productObj.variants?.map((v) => v.color) || []),
+      ];
+
       // Extract all sizes from variants
       const sizes = [];
-      productObj.variants?.forEach(variant => {
-        variant.sizes?.forEach(size => {
+      productObj.variants?.forEach((variant) => {
+        variant.sizes?.forEach((size) => {
           if (!sizes.includes(size.size)) {
             sizes.push(size.size);
           }
@@ -6443,18 +6886,21 @@ export const getDesignerDetails = async (req, res) => {
         isActive: productObj.isActive,
         rejectionReason: productObj.rejectionReason,
         createdAt: productObj.createdAt,
-        updatedAt: productObj.updatedAt
+        updatedAt: productObj.updatedAt,
       };
     });
 
     // ==================== WALLET DETAILS ====================
     const transactions = designer.wallet?.transactions || [];
     const totalCredits = transactions
-      .filter(t => t.type === 'credit' || t.type === 'refund' || t.type === 'cashback')
+      .filter(
+        (t) =>
+          t.type === "credit" || t.type === "refund" || t.type === "cashback",
+      )
       .reduce((sum, t) => sum + t.amount, 0);
-    
+
     const totalDebits = transactions
-      .filter(t => t.type === 'debit')
+      .filter((t) => t.type === "debit")
       .reduce((sum, t) => sum + t.amount, 0);
 
     // Recent transactions (last 10)
@@ -6463,25 +6909,27 @@ export const getDesignerDetails = async (req, res) => {
       .slice(0, 10);
 
     // ==================== SALES & ORDERS ====================
-    const designerProducts = await Product.find({ 
-      creatorId: designerId 
-    }).select('_id');
-    const productIds = designerProducts.map(p => p._id);
+    const designerProducts = await Product.find({
+      creatorId: designerId,
+    }).select("_id");
+    const productIds = designerProducts.map((p) => p._id);
 
     const orders = await Order.find({
-      'items.productId': { $in: productIds }
+      "items.productId": { $in: productIds },
     })
       .sort({ createdAt: -1 })
       .limit(20)
-      .populate('userId', 'name email mobile');
+      .populate("userId", "name email mobile");
 
     let totalSales = 0;
     let totalOrders = orders.length;
     let totalItemsSold = 0;
 
-    orders.forEach(order => {
-      order.items.forEach(item => {
-        if (productIds.some(id => id.toString() === item.productId.toString())) {
+    orders.forEach((order) => {
+      order.items.forEach((item) => {
+        if (
+          productIds.some((id) => id.toString() === item.productId.toString())
+        ) {
           totalSales += item.price * item.quantity;
           totalItemsSold += item.quantity;
         }
@@ -6506,20 +6954,23 @@ export const getDesignerDetails = async (req, res) => {
           isApproved: designer.isApproved,
           rejectionReason: designer.rejectionReason,
           createdAt: designer.createdAt,
-          updatedAt: designer.updatedAt
+          updatedAt: designer.updatedAt,
         },
-        
+
         // Wallet
         wallet: {
           balance: designer.wallet?.balance || 0,
-          isActive: designer.wallet?.isActive !== undefined ? designer.wallet.isActive : true,
+          isActive:
+            designer.wallet?.isActive !== undefined
+              ? designer.wallet.isActive
+              : true,
           totalCredits: totalCredits,
           totalDebits: totalDebits,
           netBalance: totalCredits - totalDebits,
           transactionCount: transactions.length,
           productFeePaid: designer.productFeePaid || 0,
           cashbackReceived: designer.cashbackReceived || 0,
-          recentTransactions: recentTransactions.map(t => ({
+          recentTransactions: recentTransactions.map((t) => ({
             id: t._id,
             type: t.type,
             amount: t.amount,
@@ -6528,39 +6979,38 @@ export const getDesignerDetails = async (req, res) => {
             referenceType: t.referenceType,
             status: t.status,
             balance: t.balance,
-            createdAt: t.createdAt
-          }))
+            createdAt: t.createdAt,
+          })),
         },
-        
+
         // Products
         products: {
           stats: stats,
           data: transformedProducts,
-          recent: transformedProducts.slice(0, 5)
+          recent: transformedProducts.slice(0, 5),
         },
-        
+
         // Sales Summary
         sales: {
           totalOrders: await Order.countDocuments({
-            'items.productId': { $in: productIds }
+            "items.productId": { $in: productIds },
           }),
           totalItemsSold: totalItemsSold,
           totalSales: totalSales,
-          recentOrders: orders.map(order => ({
+          recentOrders: orders.map((order) => ({
             _id: order._id,
             orderId: order.orderId,
             orderStatus: order.orderStatus,
             paymentStatus: order.paymentStatus,
             finalAmount: order.finalAmount,
             customer: order.userId,
-            createdAt: order.createdAt
-          }))
-        }
-      }
+            createdAt: order.createdAt,
+          })),
+        },
+      },
     });
-
   } catch (error) {
-    console.error('getDesignerDetails error:', error);
+    console.error("getDesignerDetails error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -6569,25 +7019,25 @@ export const getDesignerDetails = async (req, res) => {
 export const adminDeleteDesignerProduct = async (req, res) => {
   try {
     const { productId } = req.params;
-    
-    const product = await Product.findOne({ 
+
+    const product = await Product.findOne({
       _id: productId,
-      createdBy: 'designer'
+      createdBy: "designer",
     });
-    
+
     if (!product) {
       return res.status(404).json({
         success: false,
-        message: 'Designer product not found'
+        message: "Designer product not found",
       });
     }
-    
+
     // Delete variant images
     if (product.variants && product.variants.length) {
-      product.variants.forEach(variant => {
+      product.variants.forEach((variant) => {
         if (variant.images && variant.images.length) {
-          variant.images.forEach(image => {
-            if (!image.startsWith('http')) {
+          variant.images.forEach((image) => {
+            if (!image.startsWith("http")) {
               deleteFile(image);
             }
           });
@@ -6597,22 +7047,21 @@ export const adminDeleteDesignerProduct = async (req, res) => {
 
     // ✅ Delete product videos
     if (product.productVideos && product.productVideos.length) {
-      product.productVideos.forEach(video => {
-        if (!video.startsWith('http')) {
+      product.productVideos.forEach((video) => {
+        if (!video.startsWith("http")) {
           deleteFile(video);
         }
       });
     }
-    
+
     await Product.findByIdAndDelete(productId);
-    
+
     return res.status(200).json({
       success: true,
-      message: 'Product deleted successfully'
+      message: "Product deleted successfully",
     });
-    
   } catch (error) {
-    console.error('adminDeleteDesignerProduct error:', error);
+    console.error("adminDeleteDesignerProduct error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -6626,31 +7075,33 @@ export const adminAddMoneyToDesigner = async (req, res) => {
     if (!amount || amount <= 0) {
       return res.status(400).json({
         success: false,
-        message: 'Valid amount is required'
+        message: "Valid amount is required",
       });
     }
 
     const designer = await Designer.findById(designerId);
     if (!designer) {
-      return res.status(404).json({ success: false, message: 'Designer not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Designer not found" });
     }
 
     if (designer.wallet.isActive === false) {
       return res.status(403).json({
         success: false,
-        message: 'Wallet is currently inactive'
+        message: "Wallet is currently inactive",
       });
     }
 
     const newBalance = designer.wallet.balance + amount;
 
     designer.wallet.transactions.push({
-      type: 'credit',
+      type: "credit",
       amount: amount,
       description: description || `Admin added ₹${amount} to wallet`,
-      referenceType: 'admin',
-      status: 'completed',
-      balance: newBalance
+      referenceType: "admin",
+      status: "completed",
+      balance: newBalance,
     });
 
     designer.wallet.balance = newBalance;
@@ -6660,12 +7111,11 @@ export const adminAddMoneyToDesigner = async (req, res) => {
       success: true,
       message: `₹${amount} added to designer's wallet`,
       data: {
-        balance: designer.wallet.balance
-      }
+        balance: designer.wallet.balance,
+      },
     });
-
   } catch (error) {
-    console.error('adminAddMoneyToDesigner error:', error);
+    console.error("adminAddMoneyToDesigner error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -6679,39 +7129,41 @@ export const adminDeductMoneyFromDesigner = async (req, res) => {
     if (!amount || amount <= 0) {
       return res.status(400).json({
         success: false,
-        message: 'Valid amount is required'
+        message: "Valid amount is required",
       });
     }
 
     const designer = await Designer.findById(designerId);
     if (!designer) {
-      return res.status(404).json({ success: false, message: 'Designer not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Designer not found" });
     }
 
     if (designer.wallet.balance < amount) {
       return res.status(400).json({
         success: false,
-        message: 'Insufficient wallet balance',
-        data: { available: designer.wallet.balance }
+        message: "Insufficient wallet balance",
+        data: { available: designer.wallet.balance },
       });
     }
 
     if (designer.wallet.isActive === false) {
       return res.status(403).json({
         success: false,
-        message: 'Wallet is currently inactive'
+        message: "Wallet is currently inactive",
       });
     }
 
     const newBalance = designer.wallet.balance - amount;
 
     designer.wallet.transactions.push({
-      type: 'debit',
+      type: "debit",
       amount: amount,
       description: description || `Admin deducted ₹${amount} from wallet`,
-      referenceType: 'admin',
-      status: 'completed',
-      balance: newBalance
+      referenceType: "admin",
+      status: "completed",
+      balance: newBalance,
     });
 
     designer.wallet.balance = newBalance;
@@ -6721,12 +7173,11 @@ export const adminDeductMoneyFromDesigner = async (req, res) => {
       success: true,
       message: `₹${amount} deducted from designer's wallet`,
       data: {
-        balance: designer.wallet.balance
-      }
+        balance: designer.wallet.balance,
+      },
     });
-
   } catch (error) {
-    console.error('adminDeductMoneyFromDesigner error:', error);
+    console.error("adminDeductMoneyFromDesigner error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -6736,9 +7187,12 @@ export const getDesignerWallet = async (req, res) => {
   try {
     const { designerId } = req.params;
 
-    const designer = await Designer.findById(designerId).select('wallet name email');
+    const designer =
+      await Designer.findById(designerId).select("wallet name email");
     if (!designer) {
-      return res.status(404).json({ success: false, message: 'Designer not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Designer not found" });
     }
 
     return res.status(200).json({
@@ -6747,18 +7201,20 @@ export const getDesignerWallet = async (req, res) => {
         designer: {
           id: designer._id,
           name: designer.name,
-          email: designer.email
+          email: designer.email,
         },
-        wallet: designer.wallet || { balance: 0, transactions: [], isActive: true }
-      }
+        wallet: designer.wallet || {
+          balance: 0,
+          transactions: [],
+          isActive: true,
+        },
+      },
     });
-
   } catch (error) {
-    console.error('getDesignerWallet error:', error);
+    console.error("getDesignerWallet error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
-
 
 // ==================== GET USER WALLET BALANCE ====================
 
@@ -6769,25 +7225,28 @@ export const getDesignerWallet = async (req, res) => {
 export const getUserWallet = async (req, res) => {
   try {
     const { userId } = req.params;
-    
-    const user = await User.findById(userId).select('wallet name email mobile');
-    
+
+    const user = await User.findById(userId).select("wallet name email mobile");
+
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: "User not found",
       });
     }
-    
+
     const transactions = user.wallet.transactions || [];
     const totalCredits = transactions
-      .filter(t => t.type === 'credit' || t.type === 'refund' || t.type === 'cashback')
+      .filter(
+        (t) =>
+          t.type === "credit" || t.type === "refund" || t.type === "cashback",
+      )
       .reduce((sum, t) => sum + t.amount, 0);
-    
+
     const totalDebits = transactions
-      .filter(t => t.type === 'debit')
+      .filter((t) => t.type === "debit")
       .reduce((sum, t) => sum + t.amount, 0);
-    
+
     return res.status(200).json({
       success: true,
       data: {
@@ -6795,24 +7254,24 @@ export const getUserWallet = async (req, res) => {
           id: user._id,
           name: user.name,
           email: user.email,
-          mobile: user.mobile
+          mobile: user.mobile,
         },
         wallet: {
           balance: user.wallet.balance || 0,
-          isActive: user.wallet.isActive !== undefined ? user.wallet.isActive : true,
+          isActive:
+            user.wallet.isActive !== undefined ? user.wallet.isActive : true,
           totalCredits: totalCredits,
           totalDebits: totalDebits,
           transactionCount: transactions.length,
-          lastUpdated: user.wallet.updatedAt || user.updatedAt
-        }
-      }
+          lastUpdated: user.wallet.updatedAt || user.updatedAt,
+        },
+      },
     });
-    
   } catch (error) {
-    console.error('getUserWallet error:', error);
+    console.error("getUserWallet error:", error);
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -6827,38 +7286,38 @@ export const getUserTransactions = async (req, res) => {
   try {
     const { userId } = req.params;
     const { page = 1, limit = 20, type } = req.query;
-    
-    const user = await User.findById(userId).select('wallet name');
-    
+
+    const user = await User.findById(userId).select("wallet name");
+
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: "User not found",
       });
     }
-    
+
     let transactions = user.wallet.transactions || [];
-    
+
     // Filter by type
-    if (type && ['credit', 'debit', 'refund', 'cashback'].includes(type)) {
-      transactions = transactions.filter(t => t.type === type);
+    if (type && ["credit", "debit", "refund", "cashback"].includes(type)) {
+      transactions = transactions.filter((t) => t.type === type);
     }
-    
+
     // Sort by newest first
     transactions.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    
+
     const total = transactions.length;
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const paginated = transactions.slice(skip, skip + parseInt(limit));
-    
+
     return res.status(200).json({
       success: true,
       data: {
         user: {
           id: user._id,
-          name: user.name
+          name: user.name,
         },
-        transactions: paginated.map(t => ({
+        transactions: paginated.map((t) => ({
           id: t._id,
           type: t.type,
           amount: t.amount,
@@ -6867,22 +7326,21 @@ export const getUserTransactions = async (req, res) => {
           referenceType: t.referenceType,
           status: t.status,
           balance: t.balance,
-          createdAt: t.createdAt
+          createdAt: t.createdAt,
         })),
         pagination: {
           total,
           page: parseInt(page),
           pages: Math.ceil(total / parseInt(limit)),
-          limit: parseInt(limit)
-        }
-      }
+          limit: parseInt(limit),
+        },
+      },
     });
-    
   } catch (error) {
-    console.error('getUserTransactions error:', error);
+    console.error("getUserTransactions error:", error);
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -6897,54 +7355,55 @@ export const adminAddMoney = async (req, res) => {
   try {
     const { userId } = req.params;
     const { amount, description, reason } = req.body;
-    
+
     if (!amount || amount <= 0) {
       return res.status(400).json({
         success: false,
-        message: 'Valid amount is required'
+        message: "Valid amount is required",
       });
     }
-    
+
     const user = await User.findById(userId);
-    
+
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: "User not found",
       });
     }
-    
+
     if (user.wallet.isActive === false) {
       return res.status(403).json({
         success: false,
-        message: 'Wallet is currently inactive'
+        message: "Wallet is currently inactive",
       });
     }
-    
+
     const newBalance = user.wallet.balance + amount;
-    
+
     const transaction = {
-      type: 'credit',
+      type: "credit",
       amount: amount,
-      description: description || `Admin added ₹${amount}${reason ? ' - ' + reason : ''}`,
-      referenceType: 'admin',
-      status: 'completed',
-      balance: newBalance
+      description:
+        description || `Admin added ₹${amount}${reason ? " - " + reason : ""}`,
+      referenceType: "admin",
+      status: "completed",
+      balance: newBalance,
     };
-    
+
     user.wallet.transactions.push(transaction);
     user.wallet.balance = newBalance;
     user.wallet.updatedAt = new Date();
-    
+
     await user.save();
-    
+
     return res.status(200).json({
       success: true,
       message: `₹${amount} added to ${user.name}'s wallet successfully`,
       data: {
         user: {
           id: user._id,
-          name: user.name
+          name: user.name,
         },
         balance: user.wallet.balance,
         transaction: {
@@ -6953,16 +7412,15 @@ export const adminAddMoney = async (req, res) => {
           type: transaction.type,
           description: transaction.description,
           balance: transaction.balance,
-          createdAt: transaction.createdAt
-        }
-      }
+          createdAt: transaction.createdAt,
+        },
+      },
     });
-    
   } catch (error) {
-    console.error('adminAddMoney error:', error);
+    console.error("adminAddMoney error:", error);
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -6977,65 +7435,67 @@ export const adminDeductMoney = async (req, res) => {
   try {
     const { userId } = req.params;
     const { amount, description, reason } = req.body;
-    
+
     if (!amount || amount <= 0) {
       return res.status(400).json({
         success: false,
-        message: 'Valid amount is required'
+        message: "Valid amount is required",
       });
     }
-    
+
     const user = await User.findById(userId);
-    
+
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: "User not found",
       });
     }
-    
+
     if (user.wallet.balance < amount) {
       return res.status(400).json({
         success: false,
-        message: 'Insufficient wallet balance',
-        data: { 
+        message: "Insufficient wallet balance",
+        data: {
           available: user.wallet.balance,
-          required: amount
-        }
+          required: amount,
+        },
       });
     }
-    
+
     if (user.wallet.isActive === false) {
       return res.status(403).json({
         success: false,
-        message: 'Wallet is currently inactive'
+        message: "Wallet is currently inactive",
       });
     }
-    
+
     const newBalance = user.wallet.balance - amount;
-    
+
     const transaction = {
-      type: 'debit',
+      type: "debit",
       amount: amount,
-      description: description || `Admin deducted ₹${amount}${reason ? ' - ' + reason : ''}`,
-      referenceType: 'admin',
-      status: 'completed',
-      balance: newBalance
+      description:
+        description ||
+        `Admin deducted ₹${amount}${reason ? " - " + reason : ""}`,
+      referenceType: "admin",
+      status: "completed",
+      balance: newBalance,
     };
-    
+
     user.wallet.transactions.push(transaction);
     user.wallet.balance = newBalance;
     user.wallet.updatedAt = new Date();
-    
+
     await user.save();
-    
+
     return res.status(200).json({
       success: true,
       message: `₹${amount} deducted from ${user.name}'s wallet`,
       data: {
         user: {
           id: user._id,
-          name: user.name
+          name: user.name,
         },
         balance: user.wallet.balance,
         transaction: {
@@ -7044,16 +7504,15 @@ export const adminDeductMoney = async (req, res) => {
           type: transaction.type,
           description: transaction.description,
           balance: transaction.balance,
-          createdAt: transaction.createdAt
-        }
-      }
+          createdAt: transaction.createdAt,
+        },
+      },
     });
-    
   } catch (error) {
-    console.error('adminDeductMoney error:', error);
+    console.error("adminDeductMoney error:", error);
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -7068,55 +7527,55 @@ export const adminRefundWallet = async (req, res) => {
   try {
     const { userId } = req.params;
     const { amount, orderId, description } = req.body;
-    
+
     if (!amount || amount <= 0) {
       return res.status(400).json({
         success: false,
-        message: 'Valid amount is required'
+        message: "Valid amount is required",
       });
     }
-    
+
     const user = await User.findById(userId);
-    
+
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'User not found'
+        message: "User not found",
       });
     }
-    
+
     if (user.wallet.isActive === false) {
       return res.status(403).json({
         success: false,
-        message: 'Wallet is currently inactive'
+        message: "Wallet is currently inactive",
       });
     }
-    
+
     const newBalance = user.wallet.balance + amount;
-    
+
     const transaction = {
-      type: 'refund',
+      type: "refund",
       amount: amount,
-      description: description || `Refund for order ${orderId || ''}`,
+      description: description || `Refund for order ${orderId || ""}`,
       referenceId: orderId || null,
-      referenceType: 'refund',
-      status: 'completed',
-      balance: newBalance
+      referenceType: "refund",
+      status: "completed",
+      balance: newBalance,
     };
-    
+
     user.wallet.transactions.push(transaction);
     user.wallet.balance = newBalance;
     user.wallet.updatedAt = new Date();
-    
+
     await user.save();
-    
+
     return res.status(200).json({
       success: true,
       message: `₹${amount} refunded to ${user.name}'s wallet`,
       data: {
         user: {
           id: user._id,
-          name: user.name
+          name: user.name,
         },
         balance: user.wallet.balance,
         transaction: {
@@ -7126,29 +7585,44 @@ export const adminRefundWallet = async (req, res) => {
           description: transaction.description,
           referenceId: transaction.referenceId,
           balance: transaction.balance,
-          createdAt: transaction.createdAt
-        }
-      }
+          createdAt: transaction.createdAt,
+        },
+      },
     });
-    
   } catch (error) {
-    console.error('adminRefundWallet error:', error);
+    console.error("adminRefundWallet error:", error);
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
-
 
 // ==================== GET ALL STYLIST BOOKINGS ====================
 
 export const getAllStylistBookings = async (req, res) => {
   try {
-    const { status, stylistId, userId, date, fromDate, toDate, search, page = 1, limit = 20, sortBy = 'newest' } = req.query;
+    const {
+      status,
+      stylistId,
+      userId,
+      date,
+      fromDate,
+      toDate,
+      search,
+      page = 1,
+      limit = 20,
+      sortBy = "newest",
+    } = req.query;
 
     const query = {};
-    if (status && ['pending','accepted','rejected','cancelled','completed'].includes(status)) query.status = status;
+    if (
+      status &&
+      ["pending", "accepted", "rejected", "cancelled", "completed"].includes(
+        status,
+      )
+    )
+      query.status = status;
     if (stylistId) query.stylistId = stylistId;
     if (userId) query.userId = userId;
     if (date) query.date = date;
@@ -7159,10 +7633,10 @@ export const getAllStylistBookings = async (req, res) => {
     }
     if (search) {
       query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { mobile: { $regex: search, $options: 'i' } },
-        { location: { $regex: search, $options: 'i' } },
-        { reasonForBooking: { $regex: search, $options: 'i' } }
+        { name: { $regex: search, $options: "i" } },
+        { mobile: { $regex: search, $options: "i" } },
+        { location: { $regex: search, $options: "i" } },
+        { reasonForBooking: { $regex: search, $options: "i" } },
       ];
     }
 
@@ -7170,42 +7644,81 @@ export const getAllStylistBookings = async (req, res) => {
     const limitNum = parseInt(limit) || 20;
     const skip = (pageNum - 1) * limitNum;
 
-    const sortMap = { newest: -1, oldest: 1, date_asc: 1, date_desc: -1, amount_asc: 1, amount_desc: -1 };
+    const sortMap = {
+      newest: -1,
+      oldest: 1,
+      date_asc: 1,
+      date_desc: -1,
+      amount_asc: 1,
+      amount_desc: -1,
+    };
     const sort = { createdAt: sortMap[sortBy] || -1 };
-    if (sortBy === 'date_asc' || sortBy === 'date_desc') sort.date = sortMap[sortBy];
-    if (sortBy === 'amount_asc' || sortBy === 'amount_desc') sort.amount = sortMap[sortBy];
+    if (sortBy === "date_asc" || sortBy === "date_desc")
+      sort.date = sortMap[sortBy];
+    if (sortBy === "amount_asc" || sortBy === "amount_desc")
+      sort.amount = sortMap[sortBy];
 
     const [bookings, total, stats, revenueStats] = await Promise.all([
       StylistBooking.find(query)
-        .populate('userId', 'name email mobile profileImage')
-        .populate('stylistId', 'name email mobile profileImage')
-        .sort(sort).skip(skip).limit(limitNum),
+        .populate("userId", "name email mobile profileImage")
+        .populate("stylistId", "name email mobile profileImage")
+        .sort(sort)
+        .skip(skip)
+        .limit(limitNum),
       StylistBooking.countDocuments(query),
       StylistBooking.aggregate([
-        { $facet: {
-          total: [{ $count: 'count' }],
-          pending: [{ $match: { status: 'pending' } }, { $count: 'count' }],
-          accepted: [{ $match: { status: 'accepted' } }, { $count: 'count' }],
-          rejected: [{ $match: { status: 'rejected' } }, { $count: 'count' }],
-          completed: [{ $match: { status: 'completed' } }, { $count: 'count' }],
-          cancelled: [{ $match: { status: 'cancelled' } }, { $count: 'count' }]
-        }}
+        {
+          $facet: {
+            total: [{ $count: "count" }],
+            pending: [{ $match: { status: "pending" } }, { $count: "count" }],
+            accepted: [{ $match: { status: "accepted" } }, { $count: "count" }],
+            rejected: [{ $match: { status: "rejected" } }, { $count: "count" }],
+            completed: [
+              { $match: { status: "completed" } },
+              { $count: "count" },
+            ],
+            cancelled: [
+              { $match: { status: "cancelled" } },
+              { $count: "count" },
+            ],
+          },
+        },
       ]),
       StylistBooking.aggregate([
-        { $match: { status: 'completed' } },
-        { $group: { _id: null, totalRevenue: { $sum: '$amount' }, avgRevenue: { $avg: '$amount' }, count: { $sum: 1 } } }
-      ])
+        { $match: { status: "completed" } },
+        {
+          $group: {
+            _id: null,
+            totalRevenue: { $sum: "$amount" },
+            avgRevenue: { $avg: "$amount" },
+            count: { $sum: 1 },
+          },
+        },
+      ]),
     ]);
 
-    const statsObj = { total: 0, pending: 0, accepted: 0, rejected: 0, completed: 0, cancelled: 0 };
+    const statsObj = {
+      total: 0,
+      pending: 0,
+      accepted: 0,
+      rejected: 0,
+      completed: 0,
+      cancelled: 0,
+    };
     stats[0]?.total?.[0] && (statsObj.total = stats[0].total[0].count);
     stats[0]?.pending?.[0] && (statsObj.pending = stats[0].pending[0].count);
     stats[0]?.accepted?.[0] && (statsObj.accepted = stats[0].accepted[0].count);
     stats[0]?.rejected?.[0] && (statsObj.rejected = stats[0].rejected[0].count);
-    stats[0]?.completed?.[0] && (statsObj.completed = stats[0].completed[0].count);
-    stats[0]?.cancelled?.[0] && (statsObj.cancelled = stats[0].cancelled[0].count);
+    stats[0]?.completed?.[0] &&
+      (statsObj.completed = stats[0].completed[0].count);
+    stats[0]?.cancelled?.[0] &&
+      (statsObj.cancelled = stats[0].cancelled[0].count);
 
-    const revenue = revenueStats[0] || { totalRevenue: 0, avgRevenue: 0, count: 0 };
+    const revenue = revenueStats[0] || {
+      totalRevenue: 0,
+      avgRevenue: 0,
+      count: 0,
+    };
 
     return res.status(200).json({
       success: true,
@@ -7213,13 +7726,27 @@ export const getAllStylistBookings = async (req, res) => {
       total,
       page: pageNum,
       pages: Math.ceil(total / limitNum),
-      filters: { status: status || 'all', stylistId: stylistId || 'all', userId: userId || 'all', date: date || 'all', fromDate: fromDate || null, toDate: toDate || null, search: search || null },
-      stats: { ...statsObj, revenue: { totalRevenue: revenue.totalRevenue, averageRevenue: revenue.avgRevenue || 0, count: revenue.count } },
-      stylistBookings: bookings
+      filters: {
+        status: status || "all",
+        stylistId: stylistId || "all",
+        userId: userId || "all",
+        date: date || "all",
+        fromDate: fromDate || null,
+        toDate: toDate || null,
+        search: search || null,
+      },
+      stats: {
+        ...statsObj,
+        revenue: {
+          totalRevenue: revenue.totalRevenue,
+          averageRevenue: revenue.avgRevenue || 0,
+          count: revenue.count,
+        },
+      },
+      stylistBookings: bookings,
     });
-
   } catch (error) {
-    console.error('getAllStylistBookings error:', error);
+    console.error("getAllStylistBookings error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -7231,20 +7758,21 @@ export const getStylistBookingByIdAdmin = async (req, res) => {
     const { bookingId } = req.params;
 
     const booking = await StylistBooking.findById(bookingId)
-      .populate('userId', 'name email mobile profileImage')
-      .populate('stylistId', 'name email mobile profileImage');
+      .populate("userId", "name email mobile profileImage")
+      .populate("stylistId", "name email mobile profileImage");
 
     if (!booking) {
-      return res.status(404).json({ success: false, message: 'Stylist booking not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Stylist booking not found" });
     }
 
     return res.status(200).json({
       success: true,
-      data: booking
+      data: booking,
     });
-
   } catch (error) {
-    console.error('getStylistBookingByIdAdmin error:', error);
+    console.error("getStylistBookingByIdAdmin error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -7259,18 +7787,22 @@ export const updateStylistBookingAdmin = async (req, res) => {
     const booking = await StylistBooking.findById(bookingId);
 
     if (!booking) {
-      return res.status(404).json({ success: false, message: 'Stylist booking not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Stylist booking not found" });
     }
 
     // Admin can update even accepted bookings
     if (status) booking.status = status;
     if (amount) booking.amount = amount;
     if (paymentStatus) booking.paymentStatus = paymentStatus;
-    
+
     if (stylistId) {
       const stylist = await User.findById(stylistId);
-      if (!stylist || stylist.role !== 'Stylist') {
-        return res.status(404).json({ success: false, message: 'Stylist not found' });
+      if (!stylist || stylist.role !== "Stylist") {
+        return res
+          .status(404)
+          .json({ success: false, message: "Stylist not found" });
       }
       booking.stylistId = stylistId;
     }
@@ -7279,12 +7811,11 @@ export const updateStylistBookingAdmin = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Stylist booking updated successfully',
-      data: booking
+      message: "Stylist booking updated successfully",
+      data: booking,
     });
-
   } catch (error) {
-    console.error('updateStylistBookingAdmin error:', error);
+    console.error("updateStylistBookingAdmin error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -7298,31 +7829,32 @@ export const deleteStylistBookingAdmin = async (req, res) => {
     const booking = await StylistBooking.findById(bookingId);
 
     if (!booking) {
-      return res.status(404).json({ success: false, message: 'Stylist booking not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Stylist booking not found" });
     }
 
     await StylistBooking.findByIdAndDelete(bookingId);
 
     return res.status(200).json({
       success: true,
-      message: 'Stylist booking deleted successfully'
+      message: "Stylist booking deleted successfully",
     });
-
   } catch (error) {
-    console.error('deleteStylistBookingAdmin error:', error);
+    console.error("deleteStylistBookingAdmin error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
 
 // controllers/qrController.js
-import QRCode from 'qrcode';
-import crypto from 'crypto';
+import QRCode from "qrcode";
+import crypto from "crypto";
 /// Helper function to get base URL
 const getBaseUrl = (req) => {
   if (process.env.BASE_URL) {
     return process.env.BASE_URL;
   }
-  return `${req.protocol}://${req.get('host')}`;
+  return `${req.protocol}://${req.get("host")}`;
 };
 
 export const generateAndSaveQR = async (req, res) => {
@@ -7333,7 +7865,7 @@ export const generateAndSaveQR = async (req, res) => {
     if (!url) {
       return res.status(400).json({
         success: false,
-        message: 'URL is required'
+        message: "URL is required",
       });
     }
 
@@ -7342,30 +7874,30 @@ export const generateAndSaveQR = async (req, res) => {
     } catch (error) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide a valid URL (e.g., https://example.com)'
+        message: "Please provide a valid URL (e.g., https://example.com)",
       });
     }
 
     // Get or create admin
     let admin = await Admin.findOne();
-    
+
     if (!admin) {
       // Create default admin if doesn't exist
       admin = await Admin.create({
-        email: 'admin@example.com',
-        password: 'Admin@123'
+        email: "admin@example.com",
+        password: "Admin@123",
       });
     }
 
     // Generate QR code as base64
     const qrCodeDataURL = await QRCode.toDataURL(url, {
-      errorCorrectionLevel: 'H',
+      errorCorrectionLevel: "H",
       margin: 2,
       width: 400,
       color: {
-        dark: '#000000',
-        light: '#FFFFFF'
-      }
+        dark: "#000000",
+        light: "#FFFFFF",
+      },
     });
 
     // Save QR code to admin
@@ -7378,21 +7910,20 @@ export const generateAndSaveQR = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: 'QR Code generated and saved successfully',
+      message: "QR Code generated and saved successfully",
       data: {
         adminId: admin._id,
         url: url,
         qrCode: qrCodeDataURL,
-        imageUrl: imageUrl
-      }
+        imageUrl: imageUrl,
+      },
     });
-
   } catch (error) {
-    console.error('QR generation error:', error);
+    console.error("QR generation error:", error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to generate QR Code',
-      error: error.message
+      message: "Failed to generate QR Code",
+      error: error.message,
     });
   }
 };
@@ -7414,31 +7945,30 @@ export const getAdminQRCode = async (req, res) => {
     if (!admin) {
       return res.status(404).json({
         success: false,
-        message: 'Admin not found'
+        message: "Admin not found",
       });
     }
 
     if (!admin.QRimage) {
       return res.status(404).json({
         success: false,
-        message: 'QR Code not found. Please generate one first.'
+        message: "QR Code not found. Please generate one first.",
       });
     }
 
     // Return QR code image
-    const base64Data = admin.QRimage.replace(/^data:image\/png;base64,/, '');
-    const imageBuffer = Buffer.from(base64Data, 'base64');
+    const base64Data = admin.QRimage.replace(/^data:image\/png;base64,/, "");
+    const imageBuffer = Buffer.from(base64Data, "base64");
 
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=3600");
     res.send(imageBuffer);
-
   } catch (error) {
-    console.error('Error fetching QR:', error);
+    console.error("Error fetching QR:", error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to fetch QR Code',
-      error: error.message
+      message: "Failed to fetch QR Code",
+      error: error.message,
     });
   }
 };
@@ -7458,36 +7988,126 @@ export const downloadQRCode = async (req, res) => {
     if (!admin) {
       return res.status(404).json({
         success: false,
-        message: 'Admin not found'
+        message: "Admin not found",
       });
     }
 
     if (!admin.QRimage) {
       return res.status(404).json({
         success: false,
-        message: 'QR Code not found. Please generate one first.'
+        message: "QR Code not found. Please generate one first.",
       });
     }
 
     // Return QR code as downloadable file
-    const base64Data = admin.QRimage.replace(/^data:image\/png;base64,/, '');
-    const imageBuffer = Buffer.from(base64Data, 'base64');
+    const base64Data = admin.QRimage.replace(/^data:image\/png;base64,/, "");
+    const imageBuffer = Buffer.from(base64Data, "base64");
 
     // Generate filename with timestamp
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const filename = `qr-code-${timestamp}.png`;
 
-    res.setHeader('Content-Type', 'image/png');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Length', imageBuffer.length);
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Content-Length", imageBuffer.length);
     res.send(imageBuffer);
-
   } catch (error) {
-    console.error('Error downloading QR:', error);
+    console.error("Error downloading QR:", error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to download QR Code',
-      error: error.message
+      message: "Failed to download QR Code",
+      error: error.message,
+    });
+  }
+};
+
+export const getDashboardStats = async (req, res) => {
+  try {
+    // Total Users
+    const totalUsers = await User.countDocuments();
+
+    // Active / Verified Users
+    // Your User model has isVerified, not isActive
+    const activeUsers = await User.countDocuments({
+      isVerified: true,
+    });
+
+    // Total Orders
+    const totalOrders = await Order.countDocuments();
+
+    // Total Revenue
+    // Exclude cancelled orders
+    const revenueResult = await Order.aggregate([
+      {
+        $match: {
+          orderStatus: {
+            $ne: "cancelled",
+          },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalRevenue: {
+            $sum: "$finalAmount",
+          },
+        },
+      },
+    ]);
+
+    const totalRevenue =
+      revenueResult.length > 0
+        ? revenueResult[0].totalRevenue
+        : 0;
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        totalUsers,
+        totalOrders,
+        totalRevenue,
+        activeUsers,
+      },
+    });
+  } catch (error) {
+    console.error("getDashboardStats error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+export const getAdminProfile = async (req, res) => {
+  try {
+    // JWT middleware se admin ID aayegi
+    const adminId = req.admin.id;
+
+    const admin = await Admin.findById(adminId).select(
+      "-password -otp -otpExpires"
+    );
+
+    if (!admin) {
+      return res.status(404).json({
+        success: false,
+        message: "Admin not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Admin profile fetched successfully",
+      admin,
+    });
+  } catch (error) {
+    console.error("getAdminProfile error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
     });
   }
 };

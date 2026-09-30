@@ -1,36 +1,49 @@
 // Models/Category.js
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
-const subcategorySchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true,
+const subcategorySchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: true,
+    },
+    image: {
+      type: String,
+      required: true,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
   },
-  image: {
-    type: String,
-    required: true,
+  {
+    timestamps: true,
   },
-  isActive: {
-    type: Boolean,
-    default: true,
-  },
-}, {
-  timestamps: true,
-});
+);
 
-const categorySchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true,
-    unique: true,
+const categorySchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: true,
+      unique: true,
+    },
+
+    image: {
+      type: String,
+      required: true,
+    },
+
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+
+    subcategories: [subcategorySchema],
   },
-  isActive: {
-    type: Boolean,
-    default: true,
-  },
-  subcategories: [subcategorySchema],
-}, {
-  timestamps: true,
-});
+  {
+    timestamps: true,
+  }
+);
 
 export default mongoose.model('Category', categorySchema);
