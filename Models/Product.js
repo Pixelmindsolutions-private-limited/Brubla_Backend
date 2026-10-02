@@ -307,6 +307,7 @@
 // export default Product;
 
 import mongoose from 'mongoose';
+import { calculateTotalStock } from '../utils/inventoryUtils.js';
 
 // ==================== REVIEW SCHEMA ====================
 const reviewSchema = new mongoose.Schema({
@@ -441,6 +442,12 @@ const productSchema = new mongoose.Schema({
 
   // ========== 5. VARIANTS (price per color) ==========
   variants: [colorVariantSchema],
+  totalStock: { type: Number, default: 0, min: 0 },
+
+  // Inventory metadata; variant size stock remains the source of truth.
+  lowStockThreshold: { type: Number, min: 0, default: undefined },
+  warehouse: { type: String, trim: true, default: undefined },
+  barcode: { type: String, trim: true, default: undefined },
 
   // ========== 7. SHIPPING ==========
   shipping: {
@@ -506,7 +513,8 @@ const productSchema = new mongoose.Schema({
   averageRating: { type: Number, default: 0 }
 
 }, {
-  timestamps: true
+  timestamps: true,
+  optimisticConcurrency: true,
 });
 
 // ==================== INDEXES ====================
@@ -570,6 +578,7 @@ const generateUniqueSKU = async (productName, color, usedNumbers = new Set()) =>
 // ==================== PRE-SAVE: pricing + SKU + approval ====================
 productSchema.pre('save', async function(next) {
   try {
+    this.totalStock = calculateTotalStock(this);
     if (this.variants && this.variants.length > 0) {
       let lowestPrice = Infinity;
       let lowestActualPrice = Infinity;
@@ -671,19 +680,6 @@ productSchema.virtual('availableSizes').get(function() {
     }
   });
   return [...sizesSet];
-});
-
-productSchema.virtual('totalStock').get(function() {
-  if (!this.variants || !Array.isArray(this.variants)) return 0;
-  let total = 0;
-  this.variants.forEach(variant => {
-    if (variant && variant.sizes && Array.isArray(variant.sizes)) {
-      variant.sizes.forEach(size => {
-        if (size && size.stock) total += size.stock;
-      });
-    }
-  });
-  return total;
 });
 
 productSchema.virtual('isExclusive').get(function() {

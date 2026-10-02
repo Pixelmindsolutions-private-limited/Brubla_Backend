@@ -602,6 +602,22 @@ export const uploadProductMedia = multer({
     files: 50
   },
   fileFilter: (req, file, cb) => {
+    if (file.fieldname === 'product_video') {
+      const videoTypes = {
+        '.mp4': 'video/mp4',
+        '.mov': 'video/quicktime',
+        '.webm': 'video/webm',
+        '.avi': 'video/x-msvideo',
+        '.mkv': 'video/x-matroska',
+      };
+      const extension = path.extname(file.originalname).toLowerCase();
+      if (!file.mimetype.startsWith('video/') && videoTypes[extension]) {
+        file.mimetype = videoTypes[extension];
+      }
+      if (file.mimetype.startsWith('video/')) return cb(null, true);
+      return cb(new Error('product_video must be a video file'), false);
+    }
+
     // IMAGES → must be variant_<N>_images
     if (file.mimetype.startsWith('image/')) {
       if (!/^variant_\d+_images$/.test(file.fieldname)) {

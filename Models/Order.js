@@ -54,6 +54,8 @@ const orderItemSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     required: true
   },
+  size: String,
+  color: String,
   sizeId: {
     type: mongoose.Schema.Types.ObjectId,
     required: true
@@ -141,9 +143,11 @@ const orderSchema = new mongoose.Schema({
   deliveredAt: Date,
   cancelledAt: Date,
   cancellationReason: String,
+  stockRestoredAt: Date,
   adminNotes: String
 }, {
-  timestamps: true
+  timestamps: true,
+  optimisticConcurrency: true,
 });
 
 

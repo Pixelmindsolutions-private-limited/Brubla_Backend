@@ -12,9 +12,11 @@ import stylistRoutes from './Routes/stylistRoutes.js';
 import { fileURLToPath } from 'url';
 import adminRoutes from './Routes/adminRoutes.js';
 import designerRoutes from './Routes/designerRoutes.js';
+import sizeChartRoutes from './Routes/sizeChartRoutes.js';
+import staffRoutes from './Routes/Routestaff.js';
 import dns from 'dns';
 import fs from 'fs';
-import { createDefaultAdmin } from './utils/createAdmin.js';
+
 
 
 dns.setServers(['8.8.8.8', '8.8.4.4']);
@@ -69,6 +71,8 @@ app.use('/api/users', UserRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/designer', designerRoutes);
 app.use('/api/stylist', stylistRoutes)
+app.use('/api/admin/size-charts', sizeChartRoutes);
+app.use("/api/admin/staff", staffRoutes);
 
 app.get('/api/debug/token', (req, res) => {
   const authHeader = req.headers.authorization;

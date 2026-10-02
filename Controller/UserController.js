@@ -11,6 +11,7 @@ import StylistBooking from '../Models/StylistBooking.js';
 import LatestDesign from '../Models/LatestDesign.js';
 import { getFileUrl, deleteFile } from '../utils/fileUtils.js';
 import Product from '../Models/Product.js';
+import StockHistory from '../Models/StockHistory.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import fs from 'fs';
@@ -1502,6 +1503,8 @@ const generateOrderId = () => {
 
 // Create order from cart
 export const createOrder = async (req, res) => {
+  const deductedStock = [];
+  let orderPersisted = false;
   try {
     const { userId } = req.params;
     const { addressId, paymentMethod } = req.body;
@@ -1529,34 +1532,62 @@ export const createOrder = async (req, res) => {
 
     let totalAmount = 0;
     const orderItems = [];
+    const stockChanges = [];
+
+    // Validate the full cart before changing any stock, including duplicate size lines.
+    const requested = new Map();
+    for (const item of user.cart) {
+      const key = `${item.productId}:${item.variantId}:${item.sizeId}`;
+      requested.set(key, (requested.get(key) || 0) + Number(item.quantity || 0));
+    }
+    for (const [key, quantity] of requested) {
+      const [productId, variantId, sizeId] = key.split(":");
+      const product = await Product.findById(productId);
+      const variant = product?.variants.id(variantId);
+      const sizeObj = variant?.sizes.id(sizeId);
+      if (!sizeObj) return res.status(404).json({ success: false, message: "Product variant or size no longer exists" });
+      if (!Number.isInteger(quantity) || quantity <= 0 || sizeObj.stock < quantity) {
+        return res.status(400).json({ success: false, message: `${product.name} - ${variant.color} ${sizeObj.size} has only ${sizeObj.stock} available` });
+      }
+    }
 
     // Process cart items
     for (const cartItem of user.cart) {
       const product = await Product.findById(cartItem.productId);
       if (!product) {
-        return res.status(404).json({ success: false, message: `Product not found` });
+        const error = new Error('Product not found'); error.statusCode = 404; throw error;
       }
 
       const variant = product.variants.id(cartItem.variantId);
       if (!variant) {
-        return res.status(404).json({ success: false, message: `Variant not found` });
+        const error = new Error('Variant not found'); error.statusCode = 404; throw error;
       }
 
       const sizeObj = variant.sizes.id(cartItem.sizeId);
       if (!sizeObj) {
-        return res.status(404).json({ success: false, message: `Size not found` });
+        const error = new Error('Size not found'); error.statusCode = 404; throw error;
       }
 
       if (sizeObj.stock < cartItem.quantity) {
-        return res.status(400).json({
-          success: false,
-          message: `${product.name} - ${variant.color} ${sizeObj.size} only ${sizeObj.stock} left`
-        });
+        const error = new Error(`${product.name} - ${variant.color} ${sizeObj.size} only ${sizeObj.stock} left`);
+        error.statusCode = 400; throw error;
       }
 
       // Reduce stock
+      const previousQuantity = sizeObj.stock;
       sizeObj.stock -= cartItem.quantity;
       await product.save();
+      deductedStock.push({ productId: product._id, variantId: variant._id, sizeId: sizeObj._id, quantity: cartItem.quantity });
+      stockChanges.push({
+        productId: product._id,
+        variantId: variant._id,
+        size: sizeObj.size,
+        previousQuantity,
+        changedQuantity: -cartItem.quantity,
+        newQuantity: sizeObj.stock,
+        changeType: 'ORDER_PLACED',
+        reason: 'Customer order placed',
+      });
 
       totalAmount += cartItem.price * cartItem.quantity;
 
@@ -1564,6 +1595,8 @@ export const createOrder = async (req, res) => {
         productId: cartItem.productId,
         variantId: cartItem.variantId,
         sizeId: cartItem.sizeId,
+        size: sizeObj.size,
+        color: variant.color,
         variant: cartItem.variant,
         quantity: cartItem.quantity,
         price: cartItem.price,
@@ -1588,6 +1621,10 @@ export const createOrder = async (req, res) => {
     });
 
     await newOrder.save();
+    orderPersisted = true;
+    if (stockChanges.length) {
+      await StockHistory.insertMany(stockChanges.map((change) => ({ ...change, referenceId: newOrder.orderId })));
+    }
 
     // Clear cart
     user.cart = [];
@@ -1608,6 +1645,18 @@ export const createOrder = async (req, res) => {
 
   } catch (error) {
     console.error('createOrder error:', error);
+    if (!orderPersisted) {
+      for (const deduction of deductedStock.reverse()) {
+        try {
+          const product = await Product.findById(deduction.productId);
+          const variant = product?.variants.id(deduction.variantId);
+          const sizeObj = variant?.sizes.id(deduction.sizeId);
+          if (sizeObj) { sizeObj.stock += deduction.quantity; await product.save(); }
+        } catch (rollbackError) { console.error('Stock rollback failed:', rollbackError); }
+      }
+    }
+    if (error.statusCode) return res.status(error.statusCode).json({ success: false, message: error.message });
+    if (error.name === 'VersionError') return res.status(409).json({ success: false, message: 'Stock changed while placing the order. Please retry.' });
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -1693,6 +1742,8 @@ export const getOrderById = async (req, res) => {
 
 // Cancel order
 export const cancelOrder = async (req, res) => {
+  const restoredStock = [];
+  let orderCancelled = false;
   try {
     const { userId, orderId } = req.params;
     const { reason } = req.body;
@@ -1714,7 +1765,12 @@ export const cancelOrder = async (req, res) => {
       });
     }
 
+    if (order.stockRestoredAt) {
+      return res.status(400).json({ success: false, message: 'Stock has already been restored for this order' });
+    }
+
     // Restore stock
+    const stockChanges = [];
     for (const item of order.items) {
       const product = await Product.findById(item.productId);
       if (product) {
@@ -1722,8 +1778,21 @@ export const cancelOrder = async (req, res) => {
         if (variant) {
           const sizeObj = variant.sizes.id(item.sizeId);
           if (sizeObj) {
+            const previousQuantity = sizeObj.stock;
             sizeObj.stock += item.quantity;
             await product.save();
+            restoredStock.push({ productId: product._id, variantId: variant._id, sizeId: sizeObj._id, quantity: item.quantity });
+            stockChanges.push({
+              productId: product._id,
+              variantId: variant._id,
+              size: item.size || sizeObj.size,
+              previousQuantity,
+              changedQuantity: item.quantity,
+              newQuantity: sizeObj.stock,
+              changeType: 'ORDER_CANCELLED',
+              reason: reason || 'Cancelled by user',
+              referenceId: order.orderId,
+            });
           }
         }
       }
@@ -1731,8 +1800,11 @@ export const cancelOrder = async (req, res) => {
 
     order.orderStatus = 'cancelled';
     order.cancelledAt = new Date();
+    order.stockRestoredAt = new Date();
     order.cancellationReason = reason || 'Cancelled by user';
     await order.save();
+    orderCancelled = true;
+    if (stockChanges.length) await StockHistory.insertMany(stockChanges);
 
     return res.status(200).json({
       success: true,
@@ -1746,6 +1818,17 @@ export const cancelOrder = async (req, res) => {
 
   } catch (error) {
     console.error('cancelOrder error:', error);
+    if (!orderCancelled) {
+      for (const restoration of restoredStock.reverse()) {
+        try {
+          const product = await Product.findById(restoration.productId);
+          const variant = product?.variants.id(restoration.variantId);
+          const sizeObj = variant?.sizes.id(restoration.sizeId);
+          if (sizeObj && sizeObj.stock >= restoration.quantity) { sizeObj.stock -= restoration.quantity; await product.save(); }
+        } catch (rollbackError) { console.error('Stock restoration rollback failed:', rollbackError); }
+      }
+    }
+    if (error.name === 'VersionError') return res.status(409).json({ success: false, message: 'Order or stock changed while cancelling. Please retry.' });
     return res.status(500).json({ success: false, message: error.message });
   }
 };

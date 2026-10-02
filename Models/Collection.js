@@ -23,6 +23,27 @@ const collectionSchema = new mongoose.Schema({
     required: [true, 'Image is required'],
     default: null
   },
+
+  // ✅ NEW FIELDS
+  type: {
+    type: String,
+    enum: ['Flash Sale', 'Seasonal Sale', 'New Arrivals', 'Trending', 'Custom Collection'],
+    default: 'Custom Collection'
+  },
+  status: {
+    type: String,
+    enum: ['Draft', 'Scheduled', 'Active', 'Inactive', 'Expired'],
+    default: 'Active'
+  },
+  startDate: {
+    type: Date,
+    default: null
+  },
+  endDate: {
+    type: Date,
+    default: null
+  },
+
   products: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Product'

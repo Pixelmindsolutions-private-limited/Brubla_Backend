@@ -6,6 +6,8 @@ import { Designer, DesignerSettings } from "../Models/Designer.js";
 import Collection from "../Models/Collection.js";
 import NotificationLabel from "../Models/NotificationLabel.js";
 import Product from "../Models/Product.js";
+import StockHistory from "../Models/StockHistory.js";
+import { serializeStockProduct } from "../utils/inventoryUtils.js";
 import UpcomingCollection from "../Models/UpcomingCollection.js";
 import RecommendedProduct from "../Models/RecommendedProducts.js";
 import LatestDesign from "../Models/LatestDesign.js";
@@ -15,6 +17,7 @@ import Banner from "../Models/Banner.js";
 import Category from "../Models/Category.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
+import mongoose from "mongoose";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -201,6 +204,47 @@ export const getAllUsers = async (req, res) => {
       .json({ success: false, message: "Internal server error" });
   }
 };
+//hina
+export const getUserAndDesigner = async (req, res) => {
+  try {
+    const { name, email, mobile, addresses = [], isVerified = true } = req.body;
+
+    if (!name?.trim() || !email?.trim() || !mobile?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Name, email, and mobile are required",
+      });
+    }
+
+    const existingUser = await User.findOne({ mobile: mobile.trim() });
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        message: "A user with this mobile number already exists",
+      });
+    }
+
+    const user = await User.create({
+      name: name.trim(),
+      email: email.trim(),
+      mobile: mobile.trim(),
+      addresses: Array.isArray(addresses) ? addresses : [],
+      isVerified: Boolean(isVerified),
+      role: "User",
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Customer created successfully",
+      user,
+    });
+  } catch (error) {
+    console.error("createUserByAdmin error:", error);
+    return res
+      .status(500)
+      .json({ success: false, message: "Internal server error" });
+  }
+};
 
 export const getUserById = async (req, res) => {
   try {
@@ -216,7 +260,29 @@ export const getUserById = async (req, res) => {
         .json({ success: false, message: "User not found" });
     }
 
-    return res.status(200).json({ success: true, user });
+    const customerOrders = await Order.find({ userId: id }).sort({ createdAt: -1 });
+    const orders = await Promise.all(
+      customerOrders.map(async (order) => ({
+        ...order.toObject(),
+        items: await Promise.all(
+          order.items.map(async (item) => {
+            const product = await Product.findById(item.productId).select(
+              "name",
+            );
+            const variant = product?.variants?.id(item.variantId);
+            const size = variant?.sizes?.id(item.sizeId);
+            return {
+              ...item.toObject(),
+              productName: product?.name || "Product unavailable",
+              color: variant?.color,
+              sizeName: size?.size,
+            };
+          }),
+        ),
+      })),
+    );
+
+    return res.status(200).json({ success: true, user, orders });
   } catch (error) {
     console.error("getUserById error:", error);
     return res
@@ -1200,6 +1266,8 @@ export const createProduct = async (req, res) => {
       shipping,
       deliveryOptions,
       additionalSettings,
+      barcode,
+      warehouse,
     } = req.body;
 
     if (!["admin", "designer", "tailor", "Stylist"].includes(userRole)) {
@@ -1385,6 +1453,8 @@ export const createProduct = async (req, res) => {
       createdBy: userRole,
       creatorId: userId,
       creatorDetails,
+      barcode,
+      warehouse,
     };
 
     if (
@@ -1397,6 +1467,19 @@ export const createProduct = async (req, res) => {
 
     const product = new Product(productPayload);
     await product.save();
+    await StockHistory.insertMany((product.variants || []).flatMap((variant) =>
+      (variant.sizes || []).map((size) => ({
+        productId: product._id,
+        variantId: variant._id,
+        size: size.size,
+        previousQuantity: 0,
+        changedQuantity: Number(size.stock) || 0,
+        newQuantity: Number(size.stock) || 0,
+        changeType: "PRODUCT_CREATED",
+        reason: "Initial product stock",
+        referenceId: product._id.toString(),
+      })),
+    ));
 
     return res.status(201).json({
       success: true,
@@ -1830,7 +1913,8 @@ export const getAllProducts = async (req, res) => {
     }
 
     // ---------- Public user scope ----------
-    if (!req.user || req.user.role !== "admin") {
+    const isAdmin = ["admin", "super_admin"].includes(req.user?.role);
+    if (!isAdmin) {
       query.approvalStatus = { $in: ["approved", "not_required"] };
       query.isActive = true;
     }
@@ -1867,7 +1951,7 @@ export const getAllProducts = async (req, res) => {
         { shortDescription: { $regex: escapeRegex(search), $options: "i" } },
       ];
     }
-    if (!req.user || req.user.role !== "admin") {
+    if (!isAdmin) {
       baseQuery.approvalStatus = { $in: ["approved", "not_required"] };
       baseQuery.isActive = true;
     }
@@ -2242,6 +2326,9 @@ export const updateProductById = async (req, res) => {
       shipping,
       deliveryOptions,
       additionalSettings,
+      barcode,
+      warehouse,
+      lowStockThreshold,
     } = req.body;
 
     const userId = req.user.id;
@@ -2305,6 +2392,13 @@ export const updateProductById = async (req, res) => {
       product.shortDescription = shortDescription;
     if (brand !== undefined) product.brand = brand;
     if (gender !== undefined) product.gender = gender;
+    if (barcode !== undefined) product.barcode = barcode;
+    if (warehouse !== undefined) product.warehouse = warehouse;
+    if (lowStockThreshold !== undefined) {
+      const threshold = Number(lowStockThreshold);
+      if (!Number.isInteger(threshold) || threshold < 0) return res.status(400).json({ success: false, message: "lowStockThreshold must be a non-negative integer" });
+      product.lowStockThreshold = threshold;
+    }
 
     if (isActive !== undefined) {
       product.isActive =
@@ -4220,8 +4314,11 @@ export const toggleBannerSection = async (req, res) => {
  */
 export const createCollection = async (req, res) => {
   try {
-    const { title, tag, description, order } = req.body;
+    const { title, tag, description, order, type, status, startDate, endDate } = req.body;
     const file = req.file;
+    const collectionTag =
+      tag?.trim() ||
+      (type && type !== "Custom Collection" ? type.trim() : title?.trim());
 
     if (!file) {
       return res.status(400).json({
@@ -4243,12 +4340,18 @@ export const createCollection = async (req, res) => {
 
     const collection = new Collection({
       title,
-      tag,
+      tag: collectionTag,
       description,
       image: imageUrl,
       order: order || 0,
       isActive: true,
       products: [],
+
+      // ✅ NEW FIELDS
+      type: type || 'Custom Collection',
+      status: status || 'Active',
+      startDate: startDate ? new Date(startDate) : null,
+      endDate: endDate ? new Date(endDate) : null,
     });
 
     await collection.save();
@@ -4326,11 +4429,21 @@ export const getCollectionById = async (req, res) => {
  */
 export const updateCollection = async (req, res) => {
   try {
-    const { collectionId } = req.params;
-    const { title, tag, description, order, isActive } = req.body;
-    const file = req.file;
+    const { id } = req.params;
+    const {
+      title,
+      tag,
+      description,
+      order,
+      isActive,
+      type,
+      status,
+      startDate,
+      endDate,
+    } = req.body;
 
-    const collection = await Collection.findById(collectionId);
+    // Find collection
+    const collection = await Collection.findById(id);
     if (!collection) {
       return res.status(404).json({
         success: false,
@@ -4339,15 +4452,30 @@ export const updateCollection = async (req, res) => {
     }
 
     // Update fields
-    if (title) collection.title = title;
-    if (tag) collection.tag = tag;
-    if (description) collection.description = description;
-    if (file) {
-      collection.image = getFileUrl(req, file.filename, "collections");
-    }
+    if (title !== undefined) collection.title = title;
+    if (tag !== undefined) collection.tag = tag;
+    if (description !== undefined) collection.description = description;
     if (order !== undefined) collection.order = order;
-    if (isActive !== undefined)
-      collection.isActive = isActive === "true" || isActive === true;
+    if (isActive !== undefined) {
+      collection.isActive =
+        isActive === "true" || isActive === true;
+    }
+
+    // ✅ NEW FIELDS
+    if (type !== undefined) collection.type = type;
+    if (status !== undefined) collection.status = status;
+    if (startDate !== undefined) {
+      collection.startDate = startDate ? new Date(startDate) : null;
+    }
+    if (endDate !== undefined) {
+      collection.endDate = endDate ? new Date(endDate) : null;
+    }
+
+    // Handle image update
+    if (req.file) {
+      const imageUrl = getFileUrl(req, req.file.filename, "collections");
+      collection.image = imageUrl;
+    }
 
     await collection.save();
 
@@ -7015,6 +7143,42 @@ export const getDesignerDetails = async (req, res) => {
   }
 };
 
+
+export const updateDesignerByAdmin = async (req, res) => {
+  try {
+    const { designerId } = req.params;
+    const allowedFields = ["name", "email", "mobile", "brandName", "about"];
+    const updates = {};
+
+    allowedFields.forEach((field) => {
+      if (req.body[field] !== undefined) updates[field] = req.body[field];
+    });
+
+    const designer = await Designer.findByIdAndUpdate(designerId, updates, {
+      new: true,
+      runValidators: true,
+    }).select("-otp -otpExpires -authToken -authTokenExpires");
+
+    if (!designer) {
+      return res.status(404).json({ success: false, message: "Designer not found" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Designer updated successfully",
+      data: { designer },
+    });
+  } catch (error) {
+    console.error("updateDesignerByAdmin error:", error);
+    return res.status(error.code === 11000 ? 409 : 500).json({
+      success: false,
+      message: error.code === 11000
+        ? "Email or mobile number is already in use"
+        : error.message,
+    });
+  }
+};
+
 // Delete designer product (admin forced delete)
 export const adminDeleteDesignerProduct = async (req, res) => {
   try {
@@ -8110,4 +8274,101 @@ export const getAdminProfile = async (req, res) => {
       error: error.message,
     });
   }
+};
+
+//hina
+export const getAllStockProducts = async (req, res) => {
+  try {
+    const products = await Product.find()
+      .populate("categoryId", "name")
+      .sort({ createdAt: -1 });
+    const stockProducts = products.map((product) => ({
+      ...serializeStockProduct(product.toObject({ virtuals: false })),
+      _id: product._id,
+      isActive: product.isActive,
+      createdAt: product.createdAt,
+      updatedAt: product.updatedAt,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      message: "Stock fetched successfully",
+
+      data: {
+        products: stockProducts,
+        count: stockProducts.length
+      }
+    });
+
+  } catch (error) {
+    console.error("Get all stock error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch stock",
+      error: error.message
+    });
+  }
+};
+
+export const adjustProductStock = async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const { variantId, size, sizeId, quantity, type, reason = "" } = req.body;
+    if (!mongoose.isValidObjectId(productId)) return res.status(400).json({ success: false, message: "Invalid productId" });
+    if (!mongoose.isValidObjectId(variantId)) return res.status(400).json({ success: false, message: "Invalid variantId" });
+    if (!Number.isInteger(quantity) || quantity <= 0) return res.status(400).json({ success: false, message: "Quantity must be a positive integer" });
+    if (!["add", "remove"].includes(type)) return res.status(400).json({ success: false, message: "Type must be add or remove" });
+    if (typeof reason !== "string" || !reason.trim()) return res.status(400).json({ success: false, message: "Reason is required" });
+    const product = await Product.findById(productId).populate("categoryId", "name");
+    if (!product) return res.status(404).json({ success: false, message: "Product not found" });
+    const variant = product.variants.id(variantId);
+    if (!variant) return res.status(404).json({ success: false, message: "Variant not found" });
+    const sizeEntry = sizeId ? variant.sizes.id(sizeId) : variant.sizes.find((entry) => entry.size === size);
+    if (!sizeEntry) return res.status(404).json({ success: false, message: "Size not found" });
+    const previousQuantity = Number(sizeEntry.stock) || 0;
+    if (type === "remove" && previousQuantity < quantity) return res.status(400).json({ success: false, message: "Insufficient stock" });
+    sizeEntry.stock = previousQuantity + (type === "add" ? quantity : -quantity);
+    await product.save();
+    await StockHistory.create({ productId, variantId, size: sizeEntry.size, previousQuantity, changedQuantity: type === "add" ? quantity : -quantity, newQuantity: sizeEntry.stock, changeType: type === "add" ? "STOCK_ADDED" : "STOCK_REMOVED", reason: reason.trim(), referenceId: req.user?.id || req.admin?.id || null });
+    return res.json({ success: true, message: "Stock updated successfully", data: serializeStockProduct(product) });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message || "Failed to update stock" });
+  }
+};
+
+export const getProductStock = async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.productId)) return res.status(400).json({ success: false, message: "Invalid productId" });
+    const product = await Product.findById(req.params.productId).populate("categoryId", "name");
+    if (!product) return res.status(404).json({ success: false, message: "Product not found" });
+    return res.json({ success: true, data: serializeStockProduct(product) });
+  } catch (error) { return res.status(500).json({ success: false, message: error.message }); }
+};
+
+export const getProductStockHistory = async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.productId)) return res.status(400).json({ success: false, message: "Invalid productId" });
+    const [history, product] = await Promise.all([
+      StockHistory.find({ productId: req.params.productId }).sort({ createdAt: -1 }).lean(),
+      Product.findById(req.params.productId).select("name variants.sku variants.color").lean(),
+    ]);
+    if (!product) return res.status(404).json({ success: false, message: "Product not found" });
+    const entries = history.map((entry) => {
+      const variant = product.variants?.find((item) => item._id.toString() === entry.variantId.toString());
+      return { ...entry, productName: product.name, sku: variant?.sku || "", color: variant?.color || "" };
+    });
+    return res.json({ success: true, data: entries });
+  } catch (error) { return res.status(500).json({ success: false, message: error.message }); }
+};
+
+export const setProductStockThreshold = async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.productId)) return res.status(400).json({ success: false, message: "Invalid productId" });
+    const { threshold } = req.body;
+    if (!Number.isInteger(threshold) || threshold < 0) return res.status(400).json({ success: false, message: "Threshold must be a non-negative integer" });
+    const product = await Product.findByIdAndUpdate(req.params.productId, { lowStockThreshold: threshold }, { new: true }).populate("categoryId", "name");
+    if (!product) return res.status(404).json({ success: false, message: "Product not found" });
+    return res.json({ success: true, message: "Low stock threshold updated", data: serializeStockProduct(product) });
+  } catch (error) { return res.status(500).json({ success: false, message: error.message }); }
 };

@@ -21,6 +21,7 @@ import {
   updatePermanentAdmin,
 
   // User Management
+  getUserAndDesigner,
   getAllUsers,
   getUserById,
   updateUserById,
@@ -142,6 +143,7 @@ import {
   updateDesignerSettings,
   rejectDesigner,
   getDesignerDetails,
+  updateDesignerByAdmin,
   adminDeleteDesignerProduct,
   adminAddMoneyToDesigner,
   adminDeductMoneyFromDesigner,
@@ -165,10 +167,31 @@ import {
   getAdminQRCode,
   downloadQRCode,
   getDashboardStats,
-  getAdminProfile
+  getAdminProfile,
+  getAllStockProducts,
+  adjustProductStock,
+  getProductStock,
+  getProductStockHistory,
+  setProductStockThreshold,
 } from "../Controller/adminController.js";
 
 const router = express.Router();
+
+const handleProductMediaUpload = (req, res, next) => {
+  uploadProductMedia(req, res, (error) => {
+    if (error) {
+      const statusCode = error.code === "LIMIT_FILE_SIZE" ? 413 : 400;
+      return res.status(statusCode).json({
+        success: false,
+        message:
+          error.code === "LIMIT_FILE_SIZE"
+            ? "An uploaded file exceeds the 100 MB limit"
+            : error.message || "Product media upload failed",
+      });
+    }
+    next();
+  });
+};
 
 // ==================== ADMIN AUTH ====================
 router.post("/login", adminLogin);
@@ -180,6 +203,7 @@ router.get("/admin-qr", getAdminQRCode);
 router.get("/qr-download/:id", downloadQRCode);
 
 // ==================== USER MANAGEMENT ====================
+router.post("/users", getUserAndDesigner);//hina
 router.get("/users", getAllUsers); //complete
 router.get("/users/:id", getUserById);
 router.put("/users/:id", updateUserById);
@@ -224,14 +248,15 @@ router.delete(
 );
 
 // ==================== PRODUCT MANAGEMENT ==================== complted
-router.post("/products", authenticateToken, uploadProductMedia, createProduct);
-router.get("/products", getAllProducts);
+router.post("/products", authenticateToken, handleProductMediaUpload, createProduct);
+router.get("/products", authenticateToken, getAllProducts);
+router.get("/products/stock", authenticateAdmin, getAllStockProducts);
 router.get("/products/:id", getProductById);
 router.get("/products/creator/:creatorId", getProductsByCreatorId);
 router.put(
   "/products/:id",
   authenticateToken,
-  uploadProductMedia,
+  handleProductMediaUpload,
   updateProductById,
 );
 router.delete("/products/:id", authenticateToken, deleteProductById);
@@ -303,7 +328,7 @@ router.post("/collections", uploadCollectionImage, createCollection);
 router.get("/collections", getAllCollections);
 router.get("/collections/:collectionId", getCollectionById);
 router.put(
-  "/collections/:collectionId",
+  "/collections/:id", // ✅ Change: collectionId → id
   uploadCollectionImage,
   updateCollection,
 );
@@ -403,6 +428,7 @@ router.patch(
   rejectDesigner,
 );
 router.get("/designers/:designerId", getDesignerDetails);
+router.put("/designers/:designerId", updateDesignerByAdmin);
 
 // ==================== DESIGNER WALLET ROUTES ====================
 router.get(
@@ -443,5 +469,11 @@ router.get("/stylist-bookings", getAllStylistBookings);
 router.get("/stylist-booking/:bookingId", getStylistBookingByIdAdmin);
 router.put("/stylist-booking/:bookingId", updateStylistBookingAdmin);
 router.delete("/stylist-booking/:bookingId", deleteStylistBookingAdmin);
+// ==================== STOCK PRODUCTS ====================
+router.get("/stock-products", authenticateAdmin, getAllStockProducts);
+router.put("/products/:productId/stock", authenticateAdmin, adjustProductStock);
+router.get("/products/:productId/stock", authenticateAdmin, getProductStock);
+router.get("/products/:productId/stock-history", authenticateAdmin, getProductStockHistory);
+router.put("/products/:productId/stock-threshold", authenticateAdmin, setProductStockThreshold);
 
 export default router;
