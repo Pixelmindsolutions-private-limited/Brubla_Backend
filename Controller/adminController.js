@@ -15,6 +15,11 @@ import StylistBooking from "../Models/StylistBooking.js";
 import Order from "../Models/Order.js";
 import Banner from "../Models/Banner.js";
 import Category from "../Models/Category.js";
+import ContactDetails from "../Models/ContactDetails.js";
+import PhilosophySection from "../Models/HomePage.js";
+import Contact from "../Models/Contact.js";
+import FAQ from "../Models/FAQ.js";
+
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import mongoose from "mongoose";
@@ -3780,15 +3785,37 @@ const extractYouTubeId = (url) => {
  * Add hero section
  * POST /api/admin/homepage/hero/add
  */
+/**
+ * Add hero section
+ * POST /api/admin/homepage/hero/add
+ */
 export const addHeroSection = async (req, res) => {
   try {
-    const { type, order, url, redirectionLink } = req.body;
+    const {
+      type,
+      deviceType,
+      order,
+      url,
+      redirectionLink
+    } = req.body;
+
     const file = req.file;
 
+    // Validate type
     if (!type || !["image", "video", "youtube"].includes(type)) {
       return res.status(400).json({
         success: false,
-        message: 'Type is required and must be "image", "video", or "youtube"',
+        message:
+          'Type is required and must be "image", "video", or "youtube"',
+      });
+    }
+
+    // Validate deviceType
+    if (!deviceType || !["mobile", "desktop"].includes(deviceType)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Device type is required and must be "mobile" or "desktop"',
       });
     }
 
@@ -3805,17 +3832,28 @@ export const addHeroSection = async (req, res) => {
       }
 
       const folder =
-        type === "image" ? "homepage/hero/images" : "homepage/hero/videos";
+        type === "image"
+          ? "homepage/hero/images"
+          : "homepage/hero/videos";
+
       const urlFolder =
-        type === "image" ? "homepage/hero/images" : "homepage/hero/videos";
+        type === "image"
+          ? "homepage/hero/images"
+          : "homepage/hero/videos";
 
       if (!fs.existsSync(`uploads/${folder}`)) {
         fs.mkdirSync(`uploads/${folder}`, { recursive: true });
       }
 
       filename = file.filename;
-      fileUrl = getFileUrl(req, path.basename(file.path), urlFolder);
+
+      fileUrl = getFileUrl(
+        req,
+        path.basename(file.path),
+        urlFolder
+      );
     }
+
     // Handle YouTube URL
     else if (type === "youtube") {
       if (!url) {
@@ -3824,19 +3862,41 @@ export const addHeroSection = async (req, res) => {
           message: "URL is required for youtube type",
         });
       }
+
       fileUrl = url;
     }
 
+    // Get homepage
     let homePage = await HomePage.findOne();
+
+    // Create homepage if not exists
     if (!homePage) {
-      homePage = new HomePage({ heroSections: [], banners: [] });
+      homePage = new HomePage({
+        heroSections: [],
+        banners: [],
+      });
     }
 
+    // IMPORTANT:
+    // Fix old hero sections which don't have deviceType
+    if (homePage.heroSections?.length) {
+      homePage.heroSections.forEach((hero) => {
+        if (!hero.deviceType) {
+          hero.deviceType = "desktop";
+        }
+      });
+    }
+
+    // Add new hero section
     homePage.heroSections.push({
       type,
+      deviceType,
       filename,
       url: fileUrl,
-      order: order !== undefined ? order : homePage.heroSections.length,
+      order:
+        order !== undefined
+          ? Number(order)
+          : homePage.heroSections.length,
       redirectionLink: redirectionLink || null,
       isActive: true,
     });
@@ -3849,15 +3909,21 @@ export const addHeroSection = async (req, res) => {
       data: homePage.heroSections,
     });
   } catch (error) {
-    if (req.file?.path) deleteFile(req.file.path);
-    return res.status(500).json({ success: false, message: error.message });
+    if (req.file?.path) {
+      deleteFile(req.file.path);
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
-
 /**
  * Get all hero sections (Admin)
  * GET /api/admin/homepage/hero
  */
+
 export const getHeroSections = async (req, res) => {
   try {
     const homePage = await HomePage.findOne();
@@ -3869,15 +3935,32 @@ export const getHeroSections = async (req, res) => {
       });
     }
 
+    const heroes = homePage.heroSections
+      .sort((a, b) => a.order - b.order)
+      .map((hero) => ({
+        _id: hero._id,
+        type: hero.type,
+        deviceType: hero.deviceType,
+        filename: hero.filename,
+        url: hero.url,
+        order: hero.order,
+        redirectionLink: hero.redirectionLink,
+        isActive: hero.isActive,
+        createdAt: hero.createdAt,
+        updatedAt: hero.updatedAt,
+      }));
+
     return res.status(200).json({
       success: true,
-      data: homePage.heroSections.sort((a, b) => a.order - b.order),
+      data: heroes,
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
-
 /**
  * Get single hero section by ID (Admin)
  * GET /api/admin/homepage/hero/:heroId
@@ -3887,6 +3970,7 @@ export const getHeroSectionById = async (req, res) => {
     const { heroId } = req.params;
 
     const homePage = await HomePage.findOne();
+
     if (!homePage) {
       return res.status(404).json({
         success: false,
@@ -3895,6 +3979,7 @@ export const getHeroSectionById = async (req, res) => {
     }
 
     const hero = homePage.heroSections.id(heroId);
+
     if (!hero) {
       return res.status(404).json({
         success: false,
@@ -3907,10 +3992,12 @@ export const getHeroSectionById = async (req, res) => {
       data: hero,
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
-
 /**
  * Update hero section
  * PUT /api/admin/homepage/hero/:heroId
@@ -3918,54 +4005,135 @@ export const getHeroSectionById = async (req, res) => {
 export const updateHeroSection = async (req, res) => {
   try {
     const { heroId } = req.params;
-    const { type, order, isActive, url, redirectionLink } = req.body;
+
+    const {
+      type,
+      deviceType,
+      order,
+      isActive,
+      url,
+      redirectionLink,
+    } = req.body;
+
     const file = req.file;
 
     const homePage = await HomePage.findOne();
+
     if (!homePage) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Home page not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Home page not found",
+      });
     }
+
+    // Fix old hero sections that don't have deviceType
+    homePage.heroSections.forEach((hero) => {
+      if (!hero.deviceType) {
+        hero.deviceType = "desktop";
+      }
+    });
 
     const hero = homePage.heroSections.id(heroId);
+
     if (!hero) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Hero section not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Hero section not found",
+      });
     }
 
-    if (type) hero.type = type;
-    if (order !== undefined) hero.order = order;
-    if (isActive !== undefined) hero.isActive = isActive === "true";
+    // Validate deviceType if provided
+    if (
+      deviceType !== undefined &&
+      !["mobile", "desktop"].includes(deviceType)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'Device type must be "mobile" or "desktop"',
+      });
+    }
 
+    // Update type
+    if (type) {
+      if (!["image", "video", "youtube"].includes(type)) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'Type must be "image", "video", or "youtube"',
+        });
+      }
+
+      hero.type = type;
+    }
+
+    // Update device type
+    if (deviceType !== undefined) {
+      hero.deviceType = deviceType;
+    }
+
+    // Update order
+    if (order !== undefined) {
+      hero.order = Number(order);
+    }
+
+    // Update active status
+    if (isActive !== undefined) {
+      hero.isActive =
+        isActive === true || isActive === "true";
+    }
+
+    // Update redirection link
     if (redirectionLink !== undefined) {
       hero.redirectionLink = redirectionLink || null;
     }
 
-    // Handle file update for image/video
-    if (file && (hero.type === "image" || hero.type === "video")) {
+    // Handle new image/video file
+    if (
+      file &&
+      (hero.type === "image" || hero.type === "video")
+    ) {
+      // Delete old file
       if (hero.filename) {
         const oldFolder =
           hero.type === "image"
             ? "homepage/hero/images"
             : "homepage/hero/videos";
-        const oldFilePath = `uploads/${oldFolder}/${hero.filename}`;
+
+        const oldFilePath =
+          `uploads/${oldFolder}/${hero.filename}`;
+
         deleteFile(oldFilePath);
       }
 
       const folder =
-        hero.type === "image" ? "homepage/hero/images" : "homepage/hero/videos";
+        hero.type === "image"
+          ? "homepage/hero/images"
+          : "homepage/hero/videos";
+
       const urlFolder =
-        hero.type === "image" ? "homepage/hero/images" : "homepage/hero/videos";
+        hero.type === "image"
+          ? "homepage/hero/images"
+          : "homepage/hero/videos";
+
+      if (!fs.existsSync(`uploads/${folder}`)) {
+        fs.mkdirSync(`uploads/${folder}`, {
+          recursive: true,
+        });
+      }
 
       hero.filename = file.filename;
-      hero.url = getFileUrl(req, path.basename(file.path), urlFolder);
+
+      hero.url = getFileUrl(
+        req,
+        path.basename(file.path),
+        urlFolder
+      );
     }
 
-    // Handle URL update for youtube
+    // Update YouTube URL
     if (hero.type === "youtube" && url) {
       hero.url = url;
+      hero.filename = null;
     }
 
     await homePage.save();
@@ -3976,11 +4144,16 @@ export const updateHeroSection = async (req, res) => {
       data: hero,
     });
   } catch (error) {
-    if (req.file?.path) deleteFile(req.file.path);
-    return res.status(500).json({ success: false, message: error.message });
+    if (req.file?.path) {
+      deleteFile(req.file.path);
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
-
 /**
  * Delete hero section
  * DELETE /api/admin/homepage/hero/:heroId
@@ -3990,27 +4163,38 @@ export const deleteHeroSection = async (req, res) => {
     const { heroId } = req.params;
 
     const homePage = await HomePage.findOne();
+
     if (!homePage) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Home page not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Home page not found",
+      });
     }
 
     const hero = homePage.heroSections.id(heroId);
+
     if (!hero) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Hero section not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Hero section not found",
+      });
     }
 
+    // Delete uploaded file
     if (hero.filename) {
       const folder =
-        hero.type === "image" ? "homepage/hero/images" : "homepage/hero/videos";
+        hero.type === "image"
+          ? "homepage/hero/images"
+          : "homepage/hero/videos";
+
       const filePath = `uploads/${folder}/${hero.filename}`;
+
       deleteFile(filePath);
     }
 
+    // Remove hero from MongoDB
     homePage.heroSections.pull(heroId);
+
     await homePage.save();
 
     return res.status(200).json({
@@ -4018,7 +4202,10 @@ export const deleteHeroSection = async (req, res) => {
       message: "Hero section deleted successfully",
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
@@ -8371,4 +8558,906 @@ export const setProductStockThreshold = async (req, res) => {
     if (!product) return res.status(404).json({ success: false, message: "Product not found" });
     return res.json({ success: true, message: "Low stock threshold updated", data: serializeStockProduct(product) });
   } catch (error) { return res.status(500).json({ success: false, message: error.message }); }
+};
+
+
+
+
+
+// ============================
+// CREATE CONTACT DETAILS
+// POST /api/contact-details
+// ============================
+export const createContactDetails = async (req, res) => {
+  try {
+    const { companyName, mobileNumber, email } = req.body;
+
+    if (!companyName || !mobileNumber || !email) {
+      return res.status(400).json({
+        success: false,
+        message: "Company name, mobile number and email are required",
+      });
+    }
+
+    const existingContact = await ContactDetails.findOne();
+
+    if (existingContact) {
+      return res.status(400).json({
+        success: false,
+        message: "Contact details already exist. Please update them.",
+        data: existingContact,
+      });
+    }
+
+    const contactDetails = await ContactDetails.create({
+      companyName,
+      mobileNumber,
+      email,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Contact details created successfully",
+      data: contactDetails,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to create contact details",
+      error: error.message,
+    });
+  }
+};
+
+// ============================
+// GET ALL CONTACT DETAILS
+// GET /api/contact-details
+// ============================
+export const getContactDetails = async (req, res) => {
+  try {
+    const contactDetails = await ContactDetails.findOne();
+
+    return res.status(200).json({
+      success: true,
+      message: "Contact details fetched successfully",
+      data: contactDetails,
+    });
+  } catch (error) {
+    console.error("Get Contact Details Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch contact details",
+      error: error.message,
+    });
+  }
+};
+
+// ============================
+// GET SINGLE CONTACT DETAILS
+// GET /api/contact-details/:id
+// ============================
+export const getContactDetailsById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const contactDetails = await ContactDetails.findById(id);
+
+    if (!contactDetails) {
+      return res.status(404).json({
+        success: false,
+        message: "Contact details not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Contact details fetched successfully",
+      data: contactDetails,
+    });
+  } catch (error) {
+    console.error("Get Contact Details By ID Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch contact details",
+      error: error.message,
+    });
+  }
+};
+
+// ============================
+// UPDATE CONTACT DETAILS
+// PUT /api/contact-details/:id
+// ============================
+export const updateContactDetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { companyName, mobileNumber, email } = req.body;
+
+    const contactDetails = await ContactDetails.findByIdAndUpdate(
+      id,
+      {
+        companyName,
+        mobileNumber,
+        email,
+      },
+      {
+        new: true,
+        runValidators: true,
+      }
+    );
+
+    if (!contactDetails) {
+      return res.status(404).json({
+        success: false,
+        message: "Contact details not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Contact details updated successfully",
+      data: contactDetails,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update contact details",
+      error: error.message,
+    });
+  }
+};
+// ============================
+// DELETE CONTACT DETAILS
+// DELETE /api/contact-details/:id
+// ============================
+export const deleteContactDetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const contactDetails = await ContactDetails.findByIdAndDelete(id);
+
+    if (!contactDetails) {
+      return res.status(404).json({
+        success: false,
+        message: "Contact details not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Contact details deleted successfully",
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete contact details",
+      error: error.message,
+    });
+  }
+};
+
+const cleanImageUrl = (value) => {
+  if (!value) return value;
+
+  // Convert Markdown image/link format to plain URL
+  const markdownMatch = value.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+
+  if (markdownMatch) {
+    return markdownMatch[2];
+  }
+
+  return value.trim();
+};
+// ==========================================
+// POST - ADD / CREATE EXCLUSIVE
+// POST /api/homepage/exclusive
+// ==========================================
+export const addExclusive = async (req, res) => {
+  try {
+    const {
+      tag,
+      title,
+      description,
+      img,
+      redirectionLink,
+      isActive,
+    } = req.body;
+
+    const imageUrl = req.file
+      ? getFileUrl(req, req.file.filename, "profiles")
+      : img;
+
+    if (!tag || !title || !description || !imageUrl) {
+      return res.status(400).json({
+        success: false,
+        message: "Tag, title, description and image are required",
+      });
+    }
+
+    const cleanImg = cleanImageUrl(imageUrl);
+
+    let homePage = await HomePage.findOne();
+
+    if (!homePage) {
+      homePage = new HomePage({
+        heroSections: [],
+        banners: [],
+        exclusive: null,
+        homepageCollections: [],
+      });
+    }
+
+    if (homePage.exclusive) {
+      return res.status(400).json({
+        success: false,
+        message: "Exclusive section already exists. Please update it instead.",
+      });
+    }
+
+    homePage.exclusive = {
+      tag: tag.trim(),
+      title: title.trim(),
+      description: description.trim(),
+      img: cleanImg,
+      redirectionLink: redirectionLink || null,
+      isActive: isActive !== undefined ? isActive : true,
+    };
+
+    await homePage.save();
+
+    return res.status(201).json({
+      success: true,
+      message: "Exclusive section added successfully",
+      data: homePage.exclusive,
+    });
+  } catch (error) {
+    console.error("Add Exclusive Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to add exclusive section",
+      error: error.message,
+    });
+  }
+};
+
+
+// ==========================================
+// PUT - EDIT EXCLUSIVE
+// PUT /api/homepage/exclusive
+// ==========================================
+export const updateExclusive = async (req, res) => {
+  try {
+    const {
+      tag,
+      title,
+      description,
+      img,
+      redirectionLink,
+      isActive,
+    } = req.body;
+
+    const homePage = await HomePage.findOne();
+
+    if (!homePage) {
+      return res.status(404).json({
+        success: false,
+        message: "Home page not found",
+      });
+    }
+
+    if (!homePage.exclusive) {
+      return res.status(404).json({
+        success: false,
+        message: "Exclusive section not found",
+      });
+    }
+
+    if (tag !== undefined) {
+      homePage.exclusive.tag = tag.trim();
+    }
+
+    if (title !== undefined) {
+      homePage.exclusive.title = title.trim();
+    }
+
+    if (description !== undefined) {
+      homePage.exclusive.description = description.trim();
+    }
+
+    if (req.file || img !== undefined) {
+      const imageUrl = req.file
+        ? getFileUrl(req, req.file.filename, "profiles")
+        : img;
+      homePage.exclusive.img = cleanImageUrl(imageUrl);
+    }
+
+    if (redirectionLink !== undefined) {
+      homePage.exclusive.redirectionLink = redirectionLink;
+    }
+
+    if (isActive !== undefined) {
+      homePage.exclusive.isActive = isActive;
+    }
+
+    await homePage.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Exclusive section updated successfully",
+      data: homePage.exclusive,
+    });
+  } catch (error) {
+    console.error("Update Exclusive Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update exclusive section",
+      error: error.message,
+    });
+  }
+};
+// ==========================================
+// DELETE - DELETE EXCLUSIVE
+// DELETE /api/homepage/exclusive
+// ==========================================
+export const deleteExclusive = async (req, res) => {
+  try {
+    const homePage = await HomePage.findOne();
+
+    if (!homePage) {
+      return res.status(404).json({
+        success: false,
+        message: "Home page not found",
+      });
+    }
+
+    if (!homePage.exclusive) {
+      return res.status(404).json({
+        success: false,
+        message: "Exclusive section not found",
+      });
+    }
+
+    homePage.exclusive = null;
+
+    await homePage.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Exclusive section deleted successfully",
+      data: null,
+    });
+  } catch (error) {
+    console.error("Delete Exclusive Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete exclusive section",
+      error: error.message,
+    });
+  }
+};
+
+
+
+// ==========================================
+// POST - ADD PHILOSOPHY
+// POST /api/admin/philosophy
+// ==========================================
+export const addPhilosophy = async (req, res) => {
+  try {
+    const { title } = req.body;
+
+    if (!title) {
+      return res.status(400).json({
+        success: false,
+        message: "Title is required",
+      });
+    }
+
+    let homePage = await PhilosophySection.findOne();
+
+    // Create HomePage if it doesn't exist
+    if (!homePage) {
+      homePage = new PhilosophySection({
+        heroSections: [],
+        banners: [],
+        exclusive: null,
+        philosophy: null,
+        homepageCollections: [],
+      });
+    }
+
+    // Only one philosophy object allowed
+    if (homePage.philosophy) {
+      return res.status(400).json({
+        success: false,
+        message: "Philosophy section already exists. Please update it instead.",
+      });
+    }
+
+    // Add philosophy
+    homePage.philosophy = {
+      title: title.trim(),
+    };
+
+    await homePage.save();
+
+    return res.status(201).json({
+      success: true,
+      message: "Philosophy section added successfully",
+      data: homePage.philosophy,
+    });
+  } catch (error) {
+    console.error("Add Philosophy Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to add philosophy section",
+      error: error.message,
+    });
+  }
+};
+
+
+// ==========================================
+// PUT - UPDATE PHILOSOPHY
+// PUT /api/admin/philosophy
+// ==========================================
+export const updatePhilosophy = async (req, res) => {
+  try {
+    const { title } = req.body;
+
+    if (!title || !title.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Title is required",
+      });
+    }
+
+    const homePage = await PhilosophySection.findOne();
+
+    if (!homePage) {
+      return res.status(404).json({
+        success: false,
+        message: "Home page not found",
+      });
+    }
+
+    if (!homePage.philosophy) {
+      return res.status(404).json({
+        success: false,
+        message: "Philosophy section not found",
+      });
+    }
+
+    homePage.philosophy.title = title.trim();
+
+    await homePage.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Philosophy section updated successfully",
+      data: homePage.philosophy,
+    });
+  } catch (error) {
+    console.error("Update Philosophy Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update philosophy section",
+      error: error.message,
+    });
+  }
+};
+
+// ==========================================
+// DELETE - DELETE PHILOSOPHY
+// DELETE /api/admin/philosophy
+// ==========================================
+export const deletePhilosophy = async (req, res) => {
+  try {
+    const philosophy = await PhilosophySection.findOne();
+
+    if (!philosophy) {
+      return res.status(404).json({
+        success: false,
+        message: "Philosophy section not found",
+      });
+    }
+
+    await PhilosophySection.deleteOne({
+      _id: philosophy._id,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Philosophy section deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete Philosophy Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete philosophy section",
+      error: error.message,
+    });
+  }
+};
+
+// ==========================================
+// GET - GET ALL CONTACTS
+// GET /api/admin/contact
+// ==========================================
+export const getAllContacts = async (req, res) => {
+  try {
+    const contact = await Contact.findOne().select("contacts");
+
+    if (!contact || contact.contacts.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "No contacts found",
+        count: 0,
+        data: [],
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Contacts fetched successfully",
+      count: contact.contacts.length,
+      data: contact.contacts,
+    });
+  } catch (error) {
+    console.error("Get Contacts Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch contacts",
+      error: error.message,
+    });
+  }
+};
+
+// ==========================================
+// GET - GET SINGLE CONTACT
+// GET /api/admin/contact/:id
+// ==========================================
+export const getContactById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const contact = await Contact.findOne().select("contacts");
+
+    if (!contact) {
+      return res.status(404).json({
+        success: false,
+        message: "Contact not found",
+      });
+    }
+
+    const selectedContact = contact.contacts.id(id);
+
+    if (!selectedContact) {
+      return res.status(404).json({
+        success: false,
+        message: "Contact not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Contact fetched successfully",
+      data: selectedContact,
+    });
+  } catch (error) {
+    console.error("Get Contact By ID Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch contact",
+      error: error.message,
+    });
+  }
+};
+
+// ==========================================
+// PUT - UPDATE CONTACT
+// PUT /api/admin/contact/:id
+// ==========================================
+export const updateContact = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const {
+      fullName,
+      email,
+      phone,
+      subject,
+      message,
+    } = req.body;
+
+    const contact = await Contact.findOne();
+
+    if (!contact) {
+      return res.status(404).json({
+        success: false,
+        message: "Contact not found",
+      });
+    }
+
+    const selectedContact = contact.contacts.id(id);
+
+    if (!selectedContact) {
+      return res.status(404).json({
+        success: false,
+        message: "Contact not found",
+      });
+    }
+
+    // Update only provided fields
+    if (fullName !== undefined) {
+      selectedContact.fullName = fullName.trim();
+    }
+
+    if (email !== undefined) {
+      selectedContact.email = email.trim().toLowerCase();
+    }
+
+    if (phone !== undefined) {
+      selectedContact.phone = phone ? phone.trim() : null;
+    }
+
+    if (subject !== undefined) {
+      selectedContact.subject = subject.trim();
+    }
+
+    if (message !== undefined) {
+      selectedContact.message = message.trim();
+    }
+
+    await contact.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Contact updated successfully",
+      data: selectedContact,
+    });
+  } catch (error) {
+    console.error("Update Contact Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update contact",
+      error: error.message,
+    });
+  }
+};
+
+// ==========================================
+// DELETE - DELETE CONTACT
+// DELETE /api/admin/contact/:id
+// ==========================================
+export const deleteContact = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const contact = await Contact.findOne();
+
+    if (!contact) {
+      return res.status(404).json({
+        success: false,
+        message: "Contact not found",
+      });
+    }
+
+    const selectedContact = contact.contacts.id(id);
+
+    if (!selectedContact) {
+      return res.status(404).json({
+        success: false,
+        message: "Contact not found",
+      });
+    }
+
+    selectedContact.deleteOne();
+
+    await contact.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Contact deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete Contact Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete contact",
+      error: error.message,
+    });
+  }
+};
+
+// =====================================================
+// POST - CREATE FAQ
+// POST /api/admin/faq
+// =====================================================
+export const addFAQ = async (req, res) => {
+  try {
+    const { tag, title, description, questions } = req.body;
+
+    if (!tag || !title || !description) {
+      return res.status(400).json({
+        success: false,
+        message: "Tag, title and description are required",
+      });
+    }
+
+    const existingFAQ = await FAQ.findOne();
+    if (existingFAQ) {
+      return res.status(409).json({
+        success: false,
+        message: "An FAQ section already exists. Please update it instead.",
+      });
+    }
+    const faq = await FAQ.create({
+      tag: tag.trim(),
+      title: title.trim(),
+      description: description.trim(),
+      questions: Array.isArray(questions) ? questions : [],
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "FAQ added successfully",
+      data: faq,
+    });
+  } catch (error) {
+    console.error("Add FAQ Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to add FAQ",
+      error: error.message,
+    });
+  }
+};
+
+
+// =====================================================
+// GET - GET FAQ BY ID
+// GET /api/admin/faq/:id
+// =====================================================
+export const getFAQById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const faq = await FAQ.findById(id);
+
+    if (!faq) {
+      return res.status(404).json({
+        success: false,
+        message: "FAQ not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "FAQ fetched successfully",
+      data: faq,
+    });
+  } catch (error) {
+    console.error("Get FAQ By ID Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch FAQ",
+      error: error.message,
+    });
+  }
+};
+
+// =====================================================
+// PUT - UPDATE FAQ
+// PUT /api/admin/faq/:id
+// =====================================================
+export const updateFAQ = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const {
+      tag,
+      title,
+      description,
+      questions,
+    } = req.body;
+
+    const faq = await FAQ.findById(id);
+
+    if (!faq) {
+      return res.status(404).json({
+        success: false,
+        message: "FAQ not found",
+      });
+    }
+
+    // Update only provided fields
+    if (tag !== undefined) {
+      faq.tag = tag.trim();
+    }
+
+    if (title !== undefined) {
+      faq.title = title.trim();
+    }
+
+    if (description !== undefined) {
+      faq.description = description.trim();
+    }
+
+    if (questions !== undefined) {
+      if (!Array.isArray(questions)) {
+        return res.status(400).json({
+          success: false,
+          message: "Questions must be an array",
+        });
+      }
+
+      faq.questions = questions;
+    }
+
+    await faq.save();
+    await FAQ.deleteMany({ _id: { $ne: faq._id } });
+
+    return res.status(200).json({
+      success: true,
+      message: "FAQ updated successfully",
+      data: faq,
+    });
+  } catch (error) {
+    console.error("Update FAQ Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update FAQ",
+      error: error.message,
+    });
+  }
+};
+
+// =====================================================
+// DELETE - DELETE FAQ
+// DELETE /api/admin/faq/:id
+// =====================================================
+export const deleteFAQ = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const faq = await FAQ.findById(id);
+
+    if (!faq) {
+      return res.status(404).json({
+        success: false,
+        message: "FAQ not found",
+      });
+    }
+
+    await FAQ.deleteMany({});
+
+    return res.status(200).json({
+      success: true,
+      message: "FAQ deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete FAQ Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete FAQ",
+      error: error.message,
+    });
+  }
 };

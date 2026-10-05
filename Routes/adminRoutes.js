@@ -14,6 +14,7 @@ import {
 } from "../config/multerConfig.js";
 import { authenticateToken } from "../middleware/authMiddleware.js";
 import { authenticateAdmin } from "../middleware/authenticateAdmin.js";
+import { getAllFAQs } from "../Controller/faqController.js";
 
 import {
   // Auth
@@ -173,6 +174,30 @@ import {
   getProductStock,
   getProductStockHistory,
   setProductStockThreshold,
+  createContactDetails,
+  getContactDetails,
+  getContactDetailsById,
+  updateContactDetails,
+  deleteContactDetails,
+  // Exclusive Products
+  addExclusive,
+  updateExclusive,
+  deleteExclusive,
+
+  // Philosophy
+  addPhilosophy,
+  updatePhilosophy,
+  deletePhilosophy,
+  // Contact Us
+  getAllContacts,
+  getContactById,
+  updateContact,
+  deleteContact,
+  // FAQ
+  addFAQ,
+  getFAQById,
+  updateFAQ,
+  deleteFAQ,
 } from "../Controller/adminController.js";
 
 const router = express.Router();
@@ -203,7 +228,7 @@ router.get("/admin-qr", getAdminQRCode);
 router.get("/qr-download/:id", downloadQRCode);
 
 // ==================== USER MANAGEMENT ====================
-router.post("/users", getUserAndDesigner);//hina
+router.post("/users", getUserAndDesigner); //hina
 router.get("/users", getAllUsers); //complete
 router.get("/users/:id", getUserById);
 router.put("/users/:id", updateUserById);
@@ -248,7 +273,12 @@ router.delete(
 );
 
 // ==================== PRODUCT MANAGEMENT ==================== complted
-router.post("/products", authenticateToken, handleProductMediaUpload, createProduct);
+router.post(
+  "/products",
+  authenticateToken,
+  handleProductMediaUpload,
+  createProduct,
+);
 router.get("/products", authenticateToken, getAllProducts);
 router.get("/products/stock", authenticateAdmin, getAllStockProducts);
 router.get("/products/:id", getProductById);
@@ -473,7 +503,49 @@ router.delete("/stylist-booking/:bookingId", deleteStylistBookingAdmin);
 router.get("/stock-products", authenticateAdmin, getAllStockProducts);
 router.put("/products/:productId/stock", authenticateAdmin, adjustProductStock);
 router.get("/products/:productId/stock", authenticateAdmin, getProductStock);
-router.get("/products/:productId/stock-history", authenticateAdmin, getProductStockHistory);
-router.put("/products/:productId/stock-threshold", authenticateAdmin, setProductStockThreshold);
+router.get(
+  "/products/:productId/stock-history",
+  authenticateAdmin,
+  getProductStockHistory,
+);
+router.put(
+  "/products/:productId/stock-threshold",
+  authenticateAdmin,
+  setProductStockThreshold,
+);
+// ==================== CONTACT DETAILS Hina====================
+
+router.post("/contact-details", createContactDetails);
+
+router.get("/contact-details", getContactDetails);
+
+router.get("/contact-details/:id", getContactDetailsById);
+
+router.put("/contact-details/:id", updateContactDetails);
+
+router.delete("/contact-details/:id", deleteContactDetails);
+
+// ==================== EXCLUSIVE PRODUCTS Hina====================
+router.post("/exclusive", upload.single("img"), addExclusive);
+
+router.put("/exclusive", upload.single("img"), updateExclusive);
+
+router.delete("/exclusive", deleteExclusive);
+//==================== Philosophy Hina====================
+router.post("/philosophy", addPhilosophy);
+
+router.put("/philosophy", updatePhilosophy);
+router.delete("/philosophy", deletePhilosophy);
+// ==================== CONTACT us Hina====================
+router.get("/contacts", getAllContacts);
+router.get("/contacts/:id", getContactById);
+router.put("/contacts/:id", updateContact);
+router.delete("/contacts/:id", deleteContact);
+// ==================== FAQ Hina====================
+router.get("/faq", getAllFAQs);
+router.post("/faq", addFAQ);
+router.get("/faq/:id", getFAQById);
+router.put("/faq/:id", updateFAQ);
+router.delete("/faq/:id", deleteFAQ);
 
 export default router;
