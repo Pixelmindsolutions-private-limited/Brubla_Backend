@@ -11,6 +11,7 @@ import UserRoutes from './Routes/userRoutes.js';
 import stylistRoutes from './Routes/stylistRoutes.js';
 import { fileURLToPath } from 'url';
 import adminRoutes from './Routes/adminRoutes.js';
+import { getAbout } from './Controller/adminController.js';
 import designerRoutes from './Routes/designerRoutes.js';
 import sizeChartRoutes from './Routes/sizeChartRoutes.js';
 import staffRoutes from './Routes/Routestaff.js';
@@ -73,6 +74,7 @@ app.get('/', (req, res) => {
 // ✅ Routes
 app.use('/api/users', UserRoutes);
 app.use('/api/admin', adminRoutes);
+app.get('/api/about', getAbout);
 app.use('/api/designer', designerRoutes);
 app.use('/api/stylist', stylistRoutes)
 app.use('/api/admin/size-charts', sizeChartRoutes);//hina

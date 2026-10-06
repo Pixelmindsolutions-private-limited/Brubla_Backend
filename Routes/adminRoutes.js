@@ -198,6 +198,17 @@ import {
   getFAQById,
   updateFAQ,
   deleteFAQ,
+  // About Page
+  createAbout,
+  updateAbout,
+  getAbout,
+  deleteAbout,
+  // Footer Management
+  createFooter,
+  getAllFooters,
+  getFooterById,
+  updateFooter,
+  deleteFooter,
 } from "../Controller/adminController.js";
 
 const router = express.Router();
@@ -333,12 +344,12 @@ router.delete("/login-screen/media/:filename", deleteLoginScreenMedia);
 router.get("/login-screen/media/:filename", checkLoginScreenMedia);
 
 // Hero Section Routes
-router.post("/homepage/hero/add", uploadHeroMedia, addHeroSection);
-router.get("/homepage/hero", getHeroSections);
-router.get("/homepage/hero/:heroId", getHeroSectionById);
-router.put("/homepage/hero/:heroId", uploadHeroMedia, updateHeroSection);
-router.delete("/homepage/hero/:heroId", deleteHeroSection);
-router.patch("/homepage/hero/:heroId/toggle", toggleHeroSection);
+router.post("/hero/add", uploadHeroMedia, addHeroSection);
+router.get("/hero", getHeroSections);
+router.get("/hero/:heroId", getHeroSectionById);
+router.put("/hero/:heroId", uploadHeroMedia, updateHeroSection);
+router.delete("/hero/:heroId", deleteHeroSection);
+router.patch("/hero/:heroId/toggle", toggleHeroSection);
 
 // Banner Section Routes
 router.post("/homepage/banner/add", uploadHomepageBanner, addBannerSection);
@@ -526,9 +537,23 @@ router.put("/contact-details/:id", updateContactDetails);
 router.delete("/contact-details/:id", deleteContactDetails);
 
 // ==================== EXCLUSIVE PRODUCTS Hina====================
-router.post("/exclusive", upload.single("img"), addExclusive);
+router.post(
+  "/exclusive",
+  upload.fields([
+    { name: "images", maxCount: 10 },
+    { name: "img", maxCount: 1 },
+  ]),
+  addExclusive,
+);
 
-router.put("/exclusive", upload.single("img"), updateExclusive);
+router.put(
+  "/exclusive",
+  upload.fields([
+    { name: "images", maxCount: 10 },
+    { name: "img", maxCount: 1 },
+  ]),
+  updateExclusive,
+);
 
 router.delete("/exclusive", deleteExclusive);
 //==================== Philosophy Hina====================
@@ -547,5 +572,18 @@ router.post("/faq", addFAQ);
 router.get("/faq/:id", getFAQById);
 router.put("/faq/:id", updateFAQ);
 router.delete("/faq/:id", deleteFAQ);
+// ==================== ABOUT PAGE Hina====================
+
+router.post("/about", createAbout);
+router.put("/about", updateAbout);
+router.get("/about", getAbout);
+router.delete("/about", deleteAbout);
+
+//=============Footer Management========================
+router.post("/footer", createFooter);
+router.get("/footer", getAllFooters);
+router.get("/footer/:id", getFooterById);
+router.put("/footer/:id", updateFooter);
+router.delete("/footer/:id", deleteFooter);
 
 export default router;

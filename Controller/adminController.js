@@ -19,7 +19,8 @@ import ContactDetails from "../Models/ContactDetails.js";
 import PhilosophySection from "../Models/HomePage.js";
 import Contact from "../Models/Contact.js";
 import FAQ from "../Models/FAQ.js";
-
+import AboutPage from "../Models/AboutPage.js";
+import Footer from "../Models/Footer.js";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import mongoose from "mongoose";
@@ -8750,6 +8751,33 @@ const cleanImageUrl = (value) => {
 
   return value.trim();
 };
+
+const normalizeImages = (value) => {
+  if (value == null || value === "") return [];
+  if (Array.isArray(value)) return value.flatMap(normalizeImages);
+  if (typeof value === "string" && value.trim().startsWith("[")) {
+    try {
+      return normalizeImages(JSON.parse(value));
+    } catch {
+      // Treat invalid JSON as a single URL below.
+    }
+  }
+  return [value];
+};
+
+const getExclusiveImageUrls = (req, images, legacyImg) => {
+  const files = [
+    ...(req.files?.images || []),
+    ...(req.files?.images || []),
+    ...(req.file ? [req.file] : []),
+  ];
+  const uploadedUrls = files.map((file) =>
+    getFileUrl(req, file.filename, "profiles"),
+  );
+  return [...uploadedUrls, ...normalizeImages(images ?? legacyImg)]
+    .map(cleanImageUrl)
+    .filter(Boolean);
+};
 // ==========================================
 // POST - ADD / CREATE EXCLUSIVE
 // POST /api/homepage/exclusive
@@ -8761,22 +8789,19 @@ export const addExclusive = async (req, res) => {
       title,
       description,
       img,
+      images,
       redirectionLink,
       isActive,
     } = req.body;
 
-    const imageUrl = req.file
-      ? getFileUrl(req, req.file.filename, "profiles")
-      : img;
+    const imageUrls = getExclusiveImageUrls(req, images, img);
 
-    if (!tag || !title || !description || !imageUrl) {
+    if (!tag || !title || !description || imageUrls.length === 0) {
       return res.status(400).json({
         success: false,
         message: "Tag, title, description and image are required",
       });
     }
-
-    const cleanImg = cleanImageUrl(imageUrl);
 
     let homePage = await HomePage.findOne();
 
@@ -8800,7 +8825,7 @@ export const addExclusive = async (req, res) => {
       tag: tag.trim(),
       title: title.trim(),
       description: description.trim(),
-      img: cleanImg,
+      images: imageUrls,
       redirectionLink: redirectionLink || null,
       isActive: isActive !== undefined ? isActive : true,
     };
@@ -8835,6 +8860,7 @@ export const updateExclusive = async (req, res) => {
       title,
       description,
       img,
+      images,
       redirectionLink,
       isActive,
     } = req.body;
@@ -8867,11 +8893,14 @@ export const updateExclusive = async (req, res) => {
       homePage.exclusive.description = description.trim();
     }
 
-    if (req.file || img !== undefined) {
-      const imageUrl = req.file
-        ? getFileUrl(req, req.file.filename, "profiles")
-        : img;
-      homePage.exclusive.img = cleanImageUrl(imageUrl);
+    if (
+      req.file ||
+      req.files?.images?.length ||
+      req.files?.img?.length ||
+      img !== undefined ||
+      images !== undefined
+    ) {
+      homePage.exclusive.images = getExclusiveImageUrls(req, images, img);
     }
 
     if (redirectionLink !== undefined) {
@@ -9457,6 +9486,310 @@ export const deleteFAQ = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to delete FAQ",
+      error: error.message,
+    });
+  }
+};
+
+export const createAbout = async (req, res) => {
+  try {
+    // Check existing About page
+    const existingAbout = await AboutPage.findOne();
+
+    if (existingAbout) {
+      return res.status(409).json({
+        success: false,
+        message: "About page already exists. Please update the existing page."
+      });
+    }
+
+    const about = await AboutPage.create(req.body);
+
+    return res.status(201).json({
+      success: true,
+      message: "About page created successfully",
+      data: about
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to create About page",
+      error: error.message
+    });
+  }
+};
+
+// ============================
+// UPDATE ABOUT PAGE
+// PUT /api/admin/about
+// ============================
+export const updateAbout = async (req, res) => {
+  try {
+    const about = await AboutPage.findOne();
+
+    if (!about) {
+      return res.status(404).json({
+        success: false,
+        message: "About page not found. Please create it first."
+      });
+    }
+
+    const updatedAbout = await AboutPage.findByIdAndUpdate(
+      about._id,
+      { $set: req.body },
+      {
+        new: true,
+        runValidators: true
+      }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "About page updated successfully",
+      data: updatedAbout
+    });
+  } catch (error) {
+    console.error("Update About Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update About page",
+      error: error.message
+    });
+  }
+};
+export const getAbout = async (req, res) => {
+  try {
+    const about = await AboutPage.findOne();
+
+    if (!about) {
+      return res.status(404).json({
+        success: false,
+        message: "About page not found"
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "About page fetched successfully",
+      data: about
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch About page",
+      error: error.message
+    });
+  }
+};
+// ============================
+// DELETE ABOUT PAGE
+// DELETE /api/admin/about
+// ============================
+export const deleteAbout = async (req, res) => {
+  try {
+    const about = await AboutPage.findOne();
+
+    if (!about) {
+      return res.status(404).json({
+        success: false,
+        message: "About page not found"
+      });
+    }
+
+    await AboutPage.findByIdAndDelete(about._id);
+
+    return res.status(200).json({
+      success: true,
+      message: "About page deleted successfully"
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete About page",
+      error: error.message
+    });
+  }
+};
+
+
+
+// ============================
+// CREATE FOOTER
+// POST /api/admin/footer
+// ============================
+export const createFooter = async (req, res) => {
+  try {
+    const { description, socialMedia } = req.body;
+
+    // Check existing footer
+    const existingFooter = await Footer.findOne();
+
+    if (existingFooter) {
+      return res.status(400).json({
+        success: false,
+        message: "Footer already exists. Please update the existing footer.",
+      });
+    }
+
+    const footer = await Footer.create({
+      description,
+      socialMedia,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Footer created successfully",
+      data: footer,
+    });
+  } catch (error) {
+    console.error("Create Footer Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to create footer",
+      error: error.message,
+    });
+  }
+};
+
+
+// ============================
+// GET ALL FOOTERS
+// GET /api/admin/footer
+// ============================
+export const getAllFooters = async (req, res) => {
+  try {
+    const footers = await Footer.find().sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      message: "Footers fetched successfully",
+      count: footers.length,
+      data: footers,
+    });
+  } catch (error) {
+    console.error("Get All Footers Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch footers",
+      error: error.message,
+    });
+  }
+};
+
+
+// ============================
+// GET FOOTER BY ID
+// GET /api/admin/footer/:id
+// ============================
+export const getFooterById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const footer = await Footer.findById(id);
+
+    if (!footer) {
+      return res.status(404).json({
+        success: false,
+        message: "Footer not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Footer fetched successfully",
+      data: footer,
+    });
+  } catch (error) {
+    console.error("Get Footer By ID Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch footer",
+      error: error.message,
+    });
+  }
+};
+
+
+// ============================
+// UPDATE FOOTER
+// PUT /api/admin/footer/:id
+// ============================
+export const updateFooter = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { description, socialMedia } = req.body;
+
+    const footer = await Footer.findById(id);
+
+    if (!footer) {
+      return res.status(404).json({
+        success: false,
+        message: "Footer not found",
+      });
+    }
+
+    // Update only provided fields
+    if (description !== undefined) {
+      footer.description = description;
+    }
+
+    if (socialMedia !== undefined) {
+      footer.socialMedia = socialMedia;
+    }
+
+    await footer.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Footer updated successfully",
+      data: footer,
+    });
+  } catch (error) {
+    console.error("Update Footer Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update footer",
+      error: error.message,
+    });
+  }
+};
+
+
+// ============================
+// DELETE FOOTER
+// DELETE /api/admin/footer/:id
+// ============================
+export const deleteFooter = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const footer = await Footer.findByIdAndDelete(id);
+
+    if (!footer) {
+      return res.status(404).json({
+        success: false,
+        message: "Footer not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Footer deleted successfully",
+      data: footer,
+    });
+  } catch (error) {
+    console.error("Delete Footer Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to delete footer",
       error: error.message,
     });
   }

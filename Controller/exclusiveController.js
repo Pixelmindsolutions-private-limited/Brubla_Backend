@@ -12,6 +12,33 @@ const cleanImageUrl = (value) => {
 
   return value.trim();
 };
+
+const normalizeImages = (value) => {
+  if (value == null || value === "") return [];
+  if (Array.isArray(value)) return value.flatMap(normalizeImages);
+  if (typeof value === "string" && value.trim().startsWith("[")) {
+    try {
+      return normalizeImages(JSON.parse(value));
+    } catch {
+      // Treat invalid JSON as a single URL below.
+    }
+  }
+  return [value];
+};
+
+const getImageUrls = (req, images, legacyImg) => {
+  const files = [
+    ...(req.files?.images || []),
+    ...(req.files?.img || []),
+    ...(req.file ? [req.file] : []),
+  ];
+  const uploadedUrls = files.map((file) =>
+    getFileUrl(req, file.filename, "profiles"),
+  );
+  return [...uploadedUrls, ...normalizeImages(images ?? legacyImg)]
+    .map(cleanImageUrl)
+    .filter(Boolean);
+};
 // ==========================================
 // POST - ADD / CREATE EXCLUSIVE
 // POST /api/homepage/exclusive
@@ -23,22 +50,19 @@ export const addExclusive = async (req, res) => {
       title,
       description,
       img,
+      images,
       redirectionLink,
       isActive,
     } = req.body;
 
-    const imageUrl = req.file
-      ? getFileUrl(req, req.file.filename, "profiles")
-      : img;
+    const imageUrls = getImageUrls(req, images, img);
 
-    if (!tag || !title || !description || !imageUrl) {
+    if (!tag || !title || !description || imageUrls.length === 0) {
       return res.status(400).json({
         success: false,
         message: "Tag, title, description and image are required",
       });
     }
-
-    const cleanImg = cleanImageUrl(imageUrl);
 
     let homePage = await HomePage.findOne();
 
@@ -62,7 +86,7 @@ export const addExclusive = async (req, res) => {
       tag: tag.trim(),
       title: title.trim(),
       description: description.trim(),
-      img: cleanImg,
+      images: imageUrls,
       redirectionLink: redirectionLink || null,
       isActive: isActive !== undefined ? isActive : true,
     };
@@ -128,6 +152,7 @@ export const updateExclusive = async (req, res) => {
       title,
       description,
       img,
+      images,
       redirectionLink,
       isActive,
     } = req.body;
@@ -160,11 +185,14 @@ export const updateExclusive = async (req, res) => {
       homePage.exclusive.description = description.trim();
     }
 
-    if (req.file || img !== undefined) {
-      const imageUrl = req.file
-        ? getFileUrl(req, req.file.filename, "profiles")
-        : img;
-      homePage.exclusive.img = cleanImageUrl(imageUrl);
+    if (
+      req.file ||
+      req.files?.images?.length ||
+      req.files?.img?.length ||
+      img !== undefined ||
+      images !== undefined
+    ) {
+      homePage.exclusive.images = getImageUrls(req, images, img);
     }
 
     if (redirectionLink !== undefined) {
