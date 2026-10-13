@@ -369,21 +369,6 @@ const colorVariantSchema = new mongoose.Schema({
 });
 
 // ==================== SPECIFICATIONS SCHEMA ====================
-const specificationsSchema = new mongoose.Schema(
-  {
-    fabric: { type: String, trim: true, default: "" },
-    color: { type: String, trim: true, default: "" },
-    pattern: { type: String, trim: true, default: "" },
-    fit: { type: String, trim: true, default: "" },
-    sleeve: { type: String, trim: true, default: "" },
-    neck: { type: String, trim: true, default: "" },
-    occasion: { type: String, trim: true, default: "" },
-    washCare: { type: String, trim: true, default: "" },
-    length: { type: String, trim: true, default: "" },
-  },
-  { _id: false },
-);
-
 // ==================== SHIPPING SCHEMA ====================
 const shippingSchema = new mongoose.Schema(
   {
@@ -449,8 +434,8 @@ const productSchema = new mongoose.Schema(
 
     // ========== 3. PRODUCT SPECIFICATIONS ==========
     specifications: {
-      type: specificationsSchema,
-      default: () => ({}),
+      type: mongoose.Schema.Types.Mixed,
+      default: [],
     },
 
     // ========== 4. PRODUCT MEDIA (IMAGES + VIDEOS) ==========
@@ -539,8 +524,7 @@ const productSchema = new mongoose.Schema(
 productSchema.index({ brand: 1 });
 productSchema.index({ gender: 1 });
 productSchema.index({ exclusiveProduct: 1, isActive: 1 });
-productSchema.index({ "specifications.fabric": 1 });
-productSchema.index({ "specifications.occasion": 1 });
+productSchema.index({ "specifications.key": 1 });
 
 // ==================== SKU GENERATOR (BRUB format) ====================
 const generateUniqueSKU = async (

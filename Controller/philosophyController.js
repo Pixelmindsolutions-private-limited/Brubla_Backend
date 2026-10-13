@@ -20,7 +20,10 @@ export const getPhilosophy = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Philosophy section fetched successfully",
-      data: homePage.philosophy,
+      data: {
+        title: homePage.philosophy.title,
+        breadcrumb: homePage.philosophy.breadcrumb || "",
+      },
     });
   } catch (error) {
     console.error("Get Philosophy Error:", error);

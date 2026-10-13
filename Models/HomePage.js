@@ -46,6 +46,11 @@ const PhilosophySectionSchema = new mongoose.Schema(
       required: true,
       default: "",
     },
+    breadcrumb: {
+      type: String,
+      default: "",
+      trim: true,
+    },
   },
   {
     timestamps: true,
@@ -109,10 +114,12 @@ const exclusiveSectionSchema = new mongoose.Schema(
       trim: true,
     },
     images: {
-      type: [{
-        type: String,
-        trim: true,
-      }],
+      type: [
+        {
+          type: String,
+          trim: true,
+        },
+      ],
       default: [],
     },
     redirectionLink: {

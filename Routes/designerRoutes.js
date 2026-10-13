@@ -1,4 +1,4 @@
-// // routes/designerRoutes.js
+﻿// // routes/designerRoutes.js
 // import express from 'express';
 // import {
 //   getDesignerStats,
@@ -14,7 +14,6 @@
 // } from '../Controller/DesignerController.js';
 // import { authenticateToken, authorizeRoles } from '../middleware/authMiddleware.js';
 // import { uploadProductMedia } from '../config/multerConfig.js';
-
 // const router = express.Router();
 
 // // Apply authentication to all designer routes
@@ -66,6 +65,10 @@ import {
 } from '../Controller/DesignerController.js';
 import { authenticateToken, authorizeRoles } from '../middleware/authMiddleware.js';
 import { uploadProductMedia } from '../config/multerConfig.js';
+import {
+  createDesignerCatalogProduct, getAllDesignerCatalogProducts,
+  getDesignerCatalogProductById, updateDesignerCatalogProduct, deleteDesignerCatalogProduct,
+} from '../Controller/DesignerProductController.js';
 
 const router = express.Router();
 
@@ -86,6 +89,12 @@ router.put('/profile', updateDesignerProfile);
 router.get('/products', getDesignerProducts);
 router.get('/designer-settings', authenticateToken, getDesignerSettings);
 
+ // Independent designer products stored in their own collection
+router.get('/catalog-products', getAllDesignerCatalogProducts);
+router.post('/catalog-products', uploadProductMedia, createDesignerCatalogProduct);
+router.get('/catalog-products/:id', getDesignerCatalogProductById);
+router.put('/catalog-products/:id', uploadProductMedia, updateDesignerCatalogProduct);
+router.delete('/catalog-products/:id', deleteDesignerCatalogProduct);
 // ==================== WALLET ROUTES ====================
 router.post('/wallet/add-money', addMoneyToWallet);
 router.get('/wallet/balance', getWalletBalance);
@@ -108,3 +117,5 @@ router.patch('/products/:productId/submit-approval', submitForApproval);
 router.get('/orders', getDesignerOrders);
 
 export default router;
+
+

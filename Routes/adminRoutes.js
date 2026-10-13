@@ -211,6 +211,14 @@ import {
   deleteFooter,
 } from "../Controller/adminController.js";
 
+import {
+  createDesignerCatalogProduct,
+  getAllDesignerCatalogProducts,
+  getDesignerCatalogProductById,
+  updateDesignerCatalogProduct,
+  deleteDesignerCatalogProduct,
+} from "../Controller/DesignerProductController.js";
+
 const router = express.Router();
 
 const handleProductMediaUpload = (req, res, next) => {
@@ -282,6 +290,13 @@ router.delete(
   "/categories/:categoryId/subcategories/:subcategoryId",
   deleteSubcategoryById,
 );
+
+// ==================== DESIGNER PRODUCT MANAGEMENT ====================
+router.post("/designer-catalog-products", authenticateToken, authenticateAdmin, handleProductMediaUpload, createDesignerCatalogProduct);
+router.get("/designer-catalog-products", authenticateToken, authenticateAdmin, getAllDesignerCatalogProducts);
+router.get("/designer-catalog-products/:id", authenticateToken, authenticateAdmin, getDesignerCatalogProductById);
+router.put("/designer-catalog-products/:id", authenticateToken, authenticateAdmin, handleProductMediaUpload, updateDesignerCatalogProduct);
+router.delete("/designer-catalog-products/:id", authenticateToken, authenticateAdmin, deleteDesignerCatalogProduct);
 
 // ==================== PRODUCT MANAGEMENT ==================== complted
 router.post(

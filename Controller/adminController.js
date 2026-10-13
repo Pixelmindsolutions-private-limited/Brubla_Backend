@@ -1419,7 +1419,15 @@ export const createProduct = async (req, res) => {
       }
     };
 
-    const specsObj = parseJSON(specifications) || {};
+    const parsedSpecifications = parseJSON(specifications) || [];
+    const specsArray = (Array.isArray(parsedSpecifications)
+      ? parsedSpecifications
+      : Object.entries(parsedSpecifications).map(([key, value]) => ({ key, value })))
+      .map((specification) => ({
+        key: String(specification?.key ?? "").trim(),
+        value: String(specification?.value ?? "").trim(),
+      }))
+      .filter((specification) => specification.key && specification.value);
     const shippingObj = parseJSON(shipping) || {};
     const deliveryObj = parseJSON(deliveryOptions) || {};
     const settingsArray = parseJSON(additionalSettings);
@@ -1450,7 +1458,7 @@ export const createProduct = async (req, res) => {
       brand: brand || "",
       gender: gender || "Unisex",
       exclusiveProduct: isExclusive,
-      specifications: specsObj,
+      specifications: specsArray,
       shipping: shippingObj,
       deliveryOptions: deliveryObj,
       variants: processedVariants,
@@ -1789,9 +1797,15 @@ export const getAllProducts = async (req, res) => {
         .map((v) => v.trim())
         .filter(Boolean);
       if (arr.length > 0) {
-        query[`specifications.${field}`] = {
-          $in: arr.map((v) => new RegExp(`^${escapeRegex(v)}$`, "i")),
-        };
+        query.$and ||= [];
+        query.$and.push({
+          specifications: {
+            $elemMatch: {
+              key: field,
+              value: { $in: arr.map((v) => new RegExp(`^${escapeRegex(v)}$`, "i")) },
+            },
+          },
+        });
       }
     };
 
@@ -2434,10 +2448,15 @@ export const updateProductById = async (req, res) => {
     // ---------- Specifications (merge) ----------
     const specs = parseJSON(specifications);
     if (specs) {
-      product.specifications = {
-        ...(product.specifications?.toObject?.() || {}),
-        ...specs,
-      };
+      const specsArray = (Array.isArray(specs)
+        ? specs
+        : Object.entries(specs).map(([key, value]) => ({ key, value })))
+        .map((specification) => ({
+          key: String(specification?.key ?? "").trim(),
+          value: String(specification?.value ?? "").trim(),
+        }))
+        .filter((specification) => specification.key && specification.value);
+      product.specifications = specsArray;
     }
 
     // ---------- Shipping (merge) ----------
@@ -8978,9 +8997,9 @@ export const deleteExclusive = async (req, res) => {
 // ==========================================
 export const addPhilosophy = async (req, res) => {
   try {
-    const { title } = req.body;
+    const { title, breadcrumb } = req.body;
 
-    if (!title) {
+    if (!title || !title.trim()) {
       return res.status(400).json({
         success: false,
         message: "Title is required",
@@ -8989,7 +9008,6 @@ export const addPhilosophy = async (req, res) => {
 
     let homePage = await PhilosophySection.findOne();
 
-    // Create HomePage if it doesn't exist
     if (!homePage) {
       homePage = new PhilosophySection({
         heroSections: [],
@@ -9000,17 +9018,17 @@ export const addPhilosophy = async (req, res) => {
       });
     }
 
-    // Only one philosophy object allowed
     if (homePage.philosophy) {
       return res.status(400).json({
         success: false,
-        message: "Philosophy section already exists. Please update it instead.",
+        message:
+          "Philosophy section already exists. Please update it instead.",
       });
     }
 
-    // Add philosophy
     homePage.philosophy = {
       title: title.trim(),
+      breadcrumb: breadcrumb?.trim() || "",
     };
 
     await homePage.save();
@@ -9031,14 +9049,13 @@ export const addPhilosophy = async (req, res) => {
   }
 };
 
-
 // ==========================================
 // PUT - UPDATE PHILOSOPHY
 // PUT /api/admin/philosophy
 // ==========================================
 export const updatePhilosophy = async (req, res) => {
   try {
-    const { title } = req.body;
+    const { title, breadcrumb } = req.body;
 
     if (!title || !title.trim()) {
       return res.status(400).json({
@@ -9063,7 +9080,13 @@ export const updatePhilosophy = async (req, res) => {
       });
     }
 
+    // Update title
     homePage.philosophy.title = title.trim();
+
+    // Update breadcrumb when provided
+    if (breadcrumb !== undefined) {
+      homePage.philosophy.breadcrumb = breadcrumb.trim();
+    }
 
     await homePage.save();
 
