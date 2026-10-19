@@ -217,7 +217,24 @@ import {
   getDesignerCatalogProductById,
   updateDesignerCatalogProduct,
   deleteDesignerCatalogProduct,
+  updateSpotlightStatus,
 } from "../Controller/DesignerProductController.js";
+
+import {
+  addHeroexclusiveBanner,
+  getAllHeroexclusiveBanners,
+  getHeroexclusiveBannerByIndex,
+  updateHeroexclusiveBanner,
+  deleteHeroexclusiveBanner,
+} from "../Controller/heroexclusiveBannerController.js";
+
+import {
+  createAnnouncementBar,
+  getAllAnnouncementBars,
+  getAnnouncementBarById,
+  updateAnnouncementBar,
+  deleteAnnouncementBar,
+} from "../Controller/announcementBarController.js";
 
 const router = express.Router();
 
@@ -292,11 +309,44 @@ router.delete(
 );
 
 // ==================== DESIGNER PRODUCT MANAGEMENT ====================
-router.post("/designer-catalog-products", authenticateToken, authenticateAdmin, handleProductMediaUpload, createDesignerCatalogProduct);
-router.get("/designer-catalog-products", authenticateToken, authenticateAdmin, getAllDesignerCatalogProducts);
-router.get("/designer-catalog-products/:id", authenticateToken, authenticateAdmin, getDesignerCatalogProductById);
-router.put("/designer-catalog-products/:id", authenticateToken, authenticateAdmin, handleProductMediaUpload, updateDesignerCatalogProduct);
-router.delete("/designer-catalog-products/:id", authenticateToken, authenticateAdmin, deleteDesignerCatalogProduct);
+router.post(
+  "/designer-catalog-products",
+  authenticateToken,
+  authenticateAdmin,
+  handleProductMediaUpload,
+  createDesignerCatalogProduct,
+);
+router.get(
+  "/designer-catalog-products",
+  authenticateToken,
+  authenticateAdmin,
+  getAllDesignerCatalogProducts,
+);
+router.get(
+  "/designer-catalog-products/:id",
+  authenticateToken,
+  authenticateAdmin,
+  getDesignerCatalogProductById,
+);
+router.put(
+  "/designer-catalog-products/:id",
+  authenticateToken,
+  authenticateAdmin,
+  handleProductMediaUpload,
+  updateDesignerCatalogProduct,
+);
+router.delete(
+  "/designer-catalog-products/:id",
+  authenticateToken,
+  authenticateAdmin,
+  deleteDesignerCatalogProduct,
+);
+// Use your existing admin authentication middleware here.
+router.patch(
+  "/designer-products/:id/spotlight",
+
+  updateSpotlightStatus,
+);
 
 // ==================== PRODUCT MANAGEMENT ==================== complted
 router.post(
@@ -600,5 +650,32 @@ router.get("/footer", getAllFooters);
 router.get("/footer/:id", getFooterById);
 router.put("/footer/:id", updateFooter);
 router.delete("/footer/:id", deleteFooter);
+
+//==================HeroBannerExcluse=======================
+router.post(
+  "/heroexclusive-banner",
+  upload.fields([
+    { name: "desktopImage", maxCount: 1 },
+    { name: "mobileImage", maxCount: 1 },
+  ]),
+  addHeroexclusiveBanner,
+);
+router.get("/heroexclusive-banner", getAllHeroexclusiveBanners);
+router.get("/heroexclusive-banner/:index", getHeroexclusiveBannerByIndex);
+router.put(
+  "/heroexclusive-banner/:index",
+  upload.fields([
+    { name: "desktopImage", maxCount: 1 },
+    { name: "mobileImage", maxCount: 1 },
+  ]),
+  updateHeroexclusiveBanner,
+);
+router.delete("/heroexclusive-banner/:index", deleteHeroexclusiveBanner);
+//==================== announcement ===========================
+router.post("/announcement-bar/", createAnnouncementBar);
+router.get("/announcement-bar/", getAllAnnouncementBars);
+router.get("/announcement-bar/:id", getAnnouncementBarById);
+router.put("/announcement-bar/:id", updateAnnouncementBar);
+router.delete("/announcement-bar/:id", deleteAnnouncementBar);
 
 export default router;

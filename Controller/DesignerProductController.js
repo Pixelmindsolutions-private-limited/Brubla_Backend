@@ -274,3 +274,93 @@ export const deleteDesignerCatalogProduct = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+
+
+export const getSpotlightProducts = async (req, res) => {
+  try {
+    const allSpotlight = await DesignerProduct.find({
+      isspoligt: true,
+    })
+      .select("name isspoligt isActive approvalStatus")
+      .lean();
+
+    const activeSpotlight = await DesignerProduct.find({
+      isspoligt: true,
+      isActive: true,
+    })
+      .select("name isspoligt isActive approvalStatus")
+      .lean();
+
+    const products = await DesignerProduct.find({
+      isspoligt: true,
+      isActive: true,
+      approvalStatus: { $in: ["approved", "not_required"] },
+    })
+      .populate("categoryId", "name")
+      .populate("designerId", "name")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      debug: {
+        spotlightTrueCount: allSpotlight.length,
+        activeSpotlightCount: activeSpotlight.length,
+        eligibleSpotlightCount: products.length,
+        spotlightProducts: allSpotlight,
+      },
+      count: products.length,
+      products,
+    });
+  } catch (error) {
+    console.error("Get spotlight products error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch spotlight products",
+      error: error.message,
+    });
+  }
+};
+
+// ADMIN: Update spotlight status for DesignerProduct only
+export const updateSpotlightStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isspoligt } = req.body;
+
+    if (typeof isspoligt !== "boolean") {
+      return res.status(400).json({
+        success: false,
+        message: "isspoligt must be true or false",
+      });
+    }
+
+    const product = await DesignerProduct.findById(id);
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Designer product not found",
+      });
+    }
+
+    product.isspoligt = isspoligt;
+    await product.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `Spotlight ${isspoligt ? "enabled" : "disabled"} successfully`,
+      productId: product._id,
+      isspoligt: product.isspoligt,
+    });
+  } catch (error) {
+    console.error("Update spotlight status error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update spotlight status",
+    });
+  }
+};

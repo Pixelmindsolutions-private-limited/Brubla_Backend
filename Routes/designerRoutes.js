@@ -67,7 +67,7 @@ import { authenticateToken, authorizeRoles } from '../middleware/authMiddleware.
 import { uploadProductMedia } from '../config/multerConfig.js';
 import {
   createDesignerCatalogProduct, getAllDesignerCatalogProducts,
-  getDesignerCatalogProductById, updateDesignerCatalogProduct, deleteDesignerCatalogProduct,
+  getDesignerCatalogProductById, updateDesignerCatalogProduct, deleteDesignerCatalogProduct,getSpotlightProducts
 } from '../Controller/DesignerProductController.js';
 
 const router = express.Router();
@@ -77,6 +77,7 @@ router.post('/register', designerRegister);
 router.post('/register/verify-otp', designerVerifyRegisterOtp);
 router.post('/login', designerLoginRequest);
 router.post('/login/verify-otp', designerVerifyOtp);
+router.get("/spotlight", getSpotlightProducts);
 
 // ==================== PROTECTED ROUTES (Auth Required) ====================
 router.use(authenticateToken);
@@ -95,6 +96,7 @@ router.post('/catalog-products', uploadProductMedia, createDesignerCatalogProduc
 router.get('/catalog-products/:id', getDesignerCatalogProductById);
 router.put('/catalog-products/:id', uploadProductMedia, updateDesignerCatalogProduct);
 router.delete('/catalog-products/:id', deleteDesignerCatalogProduct);
+
 // ==================== WALLET ROUTES ====================
 router.post('/wallet/add-money', addMoneyToWallet);
 router.get('/wallet/balance', getWalletBalance);

@@ -56,6 +56,42 @@ const PhilosophySectionSchema = new mongoose.Schema(
     timestamps: true,
   },
 );
+const heroexclusiveBannerSchema = new mongoose.Schema(
+  {
+    desktopImage: {
+      type: String,
+      required: true,
+    },
+    mobileImage: {
+      type: String,
+      required: true,
+    },
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    description: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    tags: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    active: {
+      type: Boolean,
+      default: true,
+    },
+  },
+  {
+    _id: false,
+    timestamps: true,
+  },
+);
+
 // Banner Section Schema
 const bannerSectionSchema = new mongoose.Schema(
   {
@@ -163,6 +199,11 @@ const homePageSchema = new mongoose.Schema(
       type: exclusiveSectionSchema,
       default: null,
     },
+    heroexclusiveBanner: {
+      type: [heroexclusiveBannerSchema],
+      default: [],
+    },
+
     philosophy: {
       type: PhilosophySectionSchema,
       default: null,

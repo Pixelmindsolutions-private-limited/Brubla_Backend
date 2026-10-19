@@ -1,30 +1,30 @@
-import express from 'express';
-import jwt from 'jsonwebtoken'; 
-import http from 'http';
-import cors from 'cors';
-import bodyParser from 'body-parser';
-import cookieParser from 'cookie-parser';
-import dotenv from 'dotenv';
-import connectDatabase from './db/connectDatabase.js';
-import path from 'path';
-import UserRoutes from './Routes/userRoutes.js';
-import stylistRoutes from './Routes/stylistRoutes.js';
-import { fileURLToPath } from 'url';
-import adminRoutes from './Routes/adminRoutes.js';
-import { getAbout } from './Controller/adminController.js';
-import designerRoutes from './Routes/designerRoutes.js';
-import sizeChartRoutes from './Routes/sizeChartRoutes.js';
-import staffRoutes from './Routes/Routestaff.js';
-import exclusiveRoutes from './Routes/exclusiveRoutes.js';
-import philosophyRoutes   from './Routes/philosophyRoutes.js'; 
-import contactRoutes from './Routes/contactRoutes.js';     
-import FAQRoutes from './Routes/FAQRoutes.js';
-import dns from 'dns';
-import fs from 'fs';
+import express from "express";
+import jwt from "jsonwebtoken";
+import http from "http";
+import cors from "cors";
+import bodyParser from "body-parser";
+import cookieParser from "cookie-parser";
+import dotenv from "dotenv";
+import connectDatabase from "./db/connectDatabase.js";
+import path from "path";
+import UserRoutes from "./Routes/userRoutes.js";
+import stylistRoutes from "./Routes/stylistRoutes.js";
+import { fileURLToPath } from "url";
+import adminRoutes from "./Routes/adminRoutes.js";
+import { getAbout } from "./Controller/adminController.js";
+import designerRoutes from "./Routes/designerRoutes.js";
+import sizeChartRoutes from "./Routes/sizeChartRoutes.js";
+import staffRoutes from "./Routes/Routestaff.js";
+import exclusiveRoutes from "./Routes/exclusiveRoutes.js";
+import philosophyRoutes from "./Routes/philosophyRoutes.js";
+import contactRoutes from "./Routes/contactRoutes.js";
+import FAQRoutes from "./Routes/FAQRoutes.js";
+import websiteHeroexclusiveBannerRoutes from "./Routes/websiteHeroexclusiveBannerRoutes.js";
+import websiteAnnouncementBarRoute from "./Routes/websiteAnnouncementBarRoute.js"
+import dns from "dns";
+import fs from "fs";
 
-
-
-dns.setServers(['8.8.8.8', '8.8.4.4']);
+dns.setServers(["8.8.8.8", "8.8.4.4"]);
 dotenv.config();
 
 const app = express();
@@ -32,91 +32,105 @@ const app = express();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-
-
-
 // ✅ Create upload directories
-const dirs = ['uploads/banners', 'uploads/categories', 'uploads/profiles', 'uploads/misc'];
-dirs.forEach(dir => fs.mkdirSync(dir, { recursive: true }));
+const dirs = [
+  "uploads/banners",
+  "uploads/categories",
+  "uploads/profiles",
+  "uploads/misc",
+];
+dirs.forEach((dir) => fs.mkdirSync(dir, { recursive: true }));
 
 // ✅ Serve static files
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // ✅ CORS
-app.use(cors({
-  origin: ['http://localhost:3000', 'http://31.97.206.144:7686',
-     'https://vidya-enrolldeleteurl.vercel.app' ,
-      '**',"*","http://192.168.1.13:3000","http://localhost:3001", 
+app.use(
+  cors({
+    origin: [
+      "http://localhost:3000",
+      "http://31.97.206.144:7686",
+      "https://vidya-enrolldeleteurl.vercel.app",
+      "**",
+      "*",
+      "http://192.168.1.13:3000",
+      "http://localhost:3001",
       "https://brubla-web.onrender.com",
       "https://brubla.onrender.com",
       "https://brubla-admin.onrender.com",
       "http://31.97.228.17:4074",
-      "http://31.97.228.17:4076"
+      "http://31.97.228.17:4076",
     ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  credentials: true
-}));
-app.options('*', cors());
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    credentials: true,
+  }),
+);
+app.options("*", cors());
 
 // ✅ Body parsers — NO fileUpload middleware (multer handles files)
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(cookieParser());
 
 // ✅ Database
 connectDatabase();
 
 // ✅ Default route
-app.get('/', (req, res) => {
-  res.json({ status: 'success', message: 'Welcome to our service!' });
+app.get("/", (req, res) => {
+  res.json({ status: "success", message: "Welcome to our service!" });
 });
 
 // ✅ Routes
-app.use('/api/users', UserRoutes);
-app.use('/api/admin', adminRoutes);
-app.get('/api/about', getAbout);
-app.use('/api/designer', designerRoutes);
-app.use('/api/stylist', stylistRoutes)
-app.use('/api/admin/size-charts', sizeChartRoutes);//hina
-app.use("/api/admin/staff", staffRoutes);//hina
-app.use('/api/homepage/exclusive', exclusiveRoutes);//hina
-app.use('/api/homepage/philosophy', philosophyRoutes);//hina
-app.use('/api/homepage/contact', contactRoutes);//hina
-app.use('/api/homepage/faq', FAQRoutes);//hina
+app.use("/api/users", UserRoutes);
+app.use("/api/admin", adminRoutes);
+app.get("/api/about", getAbout);
+app.use("/api/designer", designerRoutes);
+app.use("/api/stylist", stylistRoutes);
+app.use("/api/admin/size-charts", sizeChartRoutes); //hina
+app.use("/api/admin/staff", staffRoutes); //hina
+app.use("/api/homepage/exclusive", exclusiveRoutes); //hina
+app.use("/api/homepage/philosophy", philosophyRoutes); //hina
+app.use("/api/homepage/contact", contactRoutes); //hina
+app.use("/api/homepage/faq", FAQRoutes); //hina
+app.use("/api/website", websiteHeroexclusiveBannerRoutes);
+app.use("/api/website", websiteAnnouncementBarRoute);
 
-app.get('/api/debug/token', (req, res) => {
+app.get("/api/debug/token", (req, res) => {
   const authHeader = req.headers.authorization;
-  
-  console.log('Debug - Auth Header:', authHeader);
-  
+
+  console.log("Debug - Auth Header:", authHeader);
+
   if (!authHeader) {
     return res.json({
       valid: false,
-      message: 'No Authorization header'
+      message: "No Authorization header",
     });
   }
-  
+
   const token = authHeader.substring(7);
-  console.log('Debug - Token length:', token.length);
-  console.log('Debug - Token preview:', token.substring(0, 50) + '...');
-  
+  console.log("Debug - Token length:", token.length);
+  console.log("Debug - Token preview:", token.substring(0, 50) + "...");
+
   try {
     const secret = process.env.JWT_SECRET_KEY;
-    console.log('Debug - Using secret:', secret ? secret.substring(0, 10) + '...' : 'NOT FOUND');
-    
+    console.log(
+      "Debug - Using secret:",
+      secret ? secret.substring(0, 10) + "..." : "NOT FOUND",
+    );
+
     const decoded = jwt.verify(token, secret);
     res.json({
       valid: true,
       tokenLength: token.length,
-      decoded: decoded
+      decoded: decoded,
     });
   } catch (error) {
-    console.error('Debug - Error:', error.message);
+    console.error("Debug - Error:", error.message);
     res.json({
       valid: false,
       tokenLength: token.length,
       error: error.message,
-      errorName: error.name
+      errorName: error.name,
     });
   }
 });
@@ -125,6 +139,6 @@ app.get('/api/debug/token', (req, res) => {
 const port = process.env.PORT || 4077;
 const server = http.createServer(app);
 
-server.listen(port, '0.0.0.0', () => {
+server.listen(port, "0.0.0.0", () => {
   console.log(`🚀 Server running on http://localhost:${port}`);
 });

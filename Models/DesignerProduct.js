@@ -429,6 +429,7 @@ const productSchema = new mongoose.Schema(
       default: "Unisex",
     },
     isActive: { type: Boolean, default: true },
+    isspoligt: { type: Boolean, default: false, index: true },
     exclusiveProduct: { type: Boolean, default: false, index: true },
 
     // ========== 2. DESCRIPTION ==========
