@@ -39,190 +39,365 @@ const getImageUrl = (req, filePath) => {
   return `${req.protocol}://${req.get('host')}/${normalized}`;
 };
 
-/**
- * STEP 1 - Login: Check if mobile number exists
- * POST /api/auth/login
- * Body: { mobile }
- *
- * If mobile NOT found → { exists: false, message: "Please register first" }
- * If mobile found    → send OTP, return { exists: true, token }
- */
+
+// export const loginRequest = async (req, res) => {
+//   try {
+//     const { mobile } = req.body;
+
+//     if (!mobile) {
+//       return res.status(400).json({ success: false, message: 'Mobile number is required' });
+//     }
+
+//     const user = await User.findOne({ mobile });
+
+//     if (!user) {
+//       return res.status(404).json({
+//         success: false,
+//         exists: false,
+//         message: 'Mobile number not registered. Please register first.',
+//       });
+//     }
+
+//     // User exists — generate OTP and auth token
+//     const otp = FIXED_OTP;
+//     const authToken = generateAuthToken();
+//     const otpExpires = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+
+//     user.otp = otp;
+//     user.otpExpires = otpExpires;
+//     user.authToken = authToken;
+//     user.authTokenExpires = otpExpires;
+//     await user.save();
+
+//     // In production: send OTP via SMS here
+//     console.log(`[OTP for ${mobile}]: ${otp}`);
+
+//     return res.status(200).json({
+//       success: true,
+//       exists: true,
+//       message: 'OTP sent to your mobile number',
+//       token: authToken, // frontend uses this token to verify OTP
+//     });
+//   } catch (error) {
+//     console.error('loginRequest error:', error);
+//     return res.status(500).json({ success: false, message: 'Internal server error' });
+//   }
+// };
+
 export const loginRequest = async (req, res) => {
   try {
     const { mobile } = req.body;
 
     if (!mobile) {
-      return res.status(400).json({ success: false, message: 'Mobile number is required' });
+      return res.status(400).json({
+        success: false,
+        message: "Mobile number is required",
+      });
     }
 
-    const user = await User.findOne({ mobile });
+    const user = await findUserByPhone(mobile);
 
     if (!user) {
       return res.status(404).json({
         success: false,
         exists: false,
-        message: 'Mobile number not registered. Please register first.',
+        message: "Mobile number not registered. Please register first.",
       });
     }
-
-    // User exists — generate OTP and auth token
-    const otp = FIXED_OTP;
-    const authToken = generateAuthToken();
-    const otpExpires = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
-
-    user.otp = otp;
-    user.otpExpires = otpExpires;
-    user.authToken = authToken;
-    user.authTokenExpires = otpExpires;
-    await user.save();
-
-    // In production: send OTP via SMS here
-    console.log(`[OTP for ${mobile}]: ${otp}`);
 
     return res.status(200).json({
       success: true,
       exists: true,
-      message: 'OTP sent to your mobile number',
-      token: authToken, // frontend uses this token to verify OTP
+      message: "Account found. Continue with Firebase phone verification.",
     });
   } catch (error) {
-    console.error('loginRequest error:', error);
-    return res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error("loginRequest error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
   }
 };
 
-/**
- * STEP 2 - Login OTP Verify
- * POST /api/auth/login/verify-otp
- * Body: { mobile, token, otp }
- *
- * Validates token + OTP (must be 1234), returns JWT
- */
+
+// export const verifyLoginOtp = async (req, res) => {
+//   try {
+//     const { mobile, token, otp } = req.body;
+
+//     if (!mobile || !token || !otp) {
+//       return res.status(400).json({ success: false, message: 'mobile, token and otp are required' });
+//     }
+
+//     const user = await User.findOne({ mobile });
+
+//     if (!user) {
+//       return res.status(404).json({ success: false, message: 'User not found' });
+//     }
+
+//     // Check token match
+//     if (user.authToken !== token) {
+//       return res.status(401).json({ success: false, message: 'Invalid token' });
+//     }
+
+//     // Check token expiry
+//     if (!user.authTokenExpires || user.authTokenExpires < new Date()) {
+//       return res.status(401).json({ success: false, message: 'Token expired. Please request OTP again.' });
+//     }
+
+//     // Check OTP
+//     if (user.otp !== otp || otp !== FIXED_OTP) {
+//       return res.status(401).json({ success: false, message: 'Invalid OTP' });
+//     }
+
+//     // Clear OTP and token fields
+//     user.otp = undefined;
+//     user.otpExpires = undefined;
+//     user.authToken = undefined;
+//     user.authTokenExpires = undefined;
+//     user.isVerified = true;
+//     await user.save();
+
+//     const jwtToken = generateJWT(user._id, user.role);
+
+//     return res.status(200).json({
+//       success: true,
+//       message: 'Login successful',
+//       jwtToken,
+//       user: {
+//         id: user._id,
+//         name: user.name,
+//         email: user.email,
+//         mobile: user.mobile,
+//         role: user.role,
+//         profileImage: user.profileImage,
+//       },
+//     });
+//   } catch (error) {
+//     console.error('verifyLoginOtp error:', error);
+//     return res.status(500).json({ success: false, message: 'Internal server error' });
+//   }
+// };
+
+
 export const verifyLoginOtp = async (req, res) => {
   try {
-    const { mobile, token, otp } = req.body;
+    const { firebaseIdToken } = req.body;
 
-    if (!mobile || !token || !otp) {
-      return res.status(400).json({ success: false, message: 'mobile, token and otp are required' });
-    }
-
-    const user = await User.findOne({ mobile });
-
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-
-    // Check token match
-    if (user.authToken !== token) {
-      return res.status(401).json({ success: false, message: 'Invalid token' });
-    }
-
-    // Check token expiry
-    if (!user.authTokenExpires || user.authTokenExpires < new Date()) {
-      return res.status(401).json({ success: false, message: 'Token expired. Please request OTP again.' });
-    }
-
-    // Check OTP
-    if (user.otp !== otp || otp !== FIXED_OTP) {
-      return res.status(401).json({ success: false, message: 'Invalid OTP' });
-    }
-
-    // Clear OTP and token fields
-    user.otp = undefined;
-    user.otpExpires = undefined;
-    user.authToken = undefined;
-    user.authTokenExpires = undefined;
-    user.isVerified = true;
-    await user.save();
-
-    const jwtToken = generateJWT(user._id, user.role);
-
-    return res.status(200).json({
-      success: true,
-      message: 'Login successful',
-      jwtToken,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        mobile: user.mobile,
-        role: user.role,
-        profileImage: user.profileImage,
-      },
-    });
-  } catch (error) {
-    console.error('verifyLoginOtp error:', error);
-    return res.status(500).json({ success: false, message: 'Internal server error' });
-  }
-};
-
-/**
- * STEP 3 - Register: Create new user and send OTP
- * POST /api/auth/register
- * Body: { name, mobile, email, role }
- *
- * role must be one of: Tailor, Designer, User, Stylist
- */
-export const register = async (req, res) => {
-  try {
-    const { name, mobile, email, role } = req.body;
-
-    if (!name || !mobile || !email || !role) {
-      return res.status(400).json({ success: false, message: 'name, mobile, email and role are required' });
-    }
-
-    const validRoles = ['Tailor', 'Designer', 'User', 'Stylist'];
-    if (!validRoles.includes(role)) {
-      return res.status(400).json({ success: false, message: `role must be one of: ${validRoles.join(', ')}` });
-    }
-
-    // Check if mobile already registered
-    const existing = await User.findOne({ mobile });
-    if (existing) {
-      return res.status(409).json({
+    if (!firebaseIdToken) {
+      return res.status(400).json({
         success: false,
-        exists: true,
-        message: 'Mobile number already registered. Please login.',
+        message: "Firebase ID token is required",
       });
     }
 
-    // Create user (unverified)
-    const otp = FIXED_OTP;
-    const authToken = generateAuthToken();
-    const otpExpires = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+    // Verify the token issued by Firebase.
+    const decodedToken = await verifyFirebaseIdToken(firebaseIdToken);
 
-    const newUser = new User({
-      name,
-      mobile,
-      email,
-      role,
-      otp,
-      otpExpires,
-      authToken,
-      authTokenExpires: otpExpires,
-      isVerified: false,
-    });
-    await newUser.save();
+    if (!decodedToken || !decodedToken.phone_number) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid Firebase token or verified phone number missing",
+      });
+    }
 
-    // In production: send OTP via SMS here
-    console.log(`[Registration OTP for ${mobile}]: ${otp}`);
+    const { uid: firebaseUid, phone_number: verifiedPhone } = decodedToken;
 
-    return res.status(201).json({
-      success: true,
-      message: 'OTP sent to your mobile for registration verification',
-      token: authToken,
-    });
+    // Find the existing MongoDB account using the verified phone.
+    const user = await findUserByPhone(verifiedPhone);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        exists: false,
+        message: "No account found. Please register first.",
+      });
+    }
+
+    // Prevent one Firebase identity from taking over another linked account.
+    if (user.firebaseUid && user.firebaseUid !== firebaseUid) {
+      return res.status(409).json({
+        success: false,
+        message: "This account is linked to a different Firebase identity",
+      });
+    }
+
+    // Link legacy accounts after successful Firebase phone verification.
+    if (!user.firebaseUid) {
+      const uidAlreadyUsed = await User.findOne({ firebaseUid });
+
+      if (uidAlreadyUsed) {
+        return res.status(409).json({
+          success: false,
+          message: "Firebase identity is already linked to another account",
+        });
+      }
+
+      user.firebaseUid = firebaseUid;
+    }
+
+    user.isVerified = true;
+
+    // Do not overwrite the user's existing profile, wallet, cart, etc.
+    await user.save();
+
+    return createAppJwtResponse(res, user, "Login successful");
   } catch (error) {
-    console.error('register error:', error);
-    return res.status(500).json({ success: false, message: 'Internal server error' });
+    console.error("verifyLoginOtp error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
   }
 };
 
-/**
- * STEP 4 - Register OTP Verify → auto login to home
- * POST /api/auth/register/verify-otp
- * Body: { mobile, token, otp }
- */
+
+// export const register = async (req, res) => {
+//   try {
+//     const { name, mobile, email, role } = req.body;
+
+//     if (!name || !mobile || !email || !role) {
+//       return res.status(400).json({ success: false, message: 'name, mobile, email and role are required' });
+//     }
+
+//     const validRoles = ['Tailor', 'Designer', 'User', 'Stylist'];
+//     if (!validRoles.includes(role)) {
+//       return res.status(400).json({ success: false, message: `role must be one of: ${validRoles.join(', ')}` });
+//     }
+
+//     // Check if mobile already registered
+//     const existing = await User.findOne({ mobile });
+//     if (existing) {
+//       return res.status(409).json({
+//         success: false,
+//         exists: true,
+//         message: 'Mobile number already registered. Please login.',
+//       });
+//     }
+
+//     // Create user (unverified)
+//     const otp = FIXED_OTP;
+//     const authToken = generateAuthToken();
+//     const otpExpires = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+
+//     const newUser = new User({
+//       name,
+//       mobile,
+//       email,
+//       role,
+//       otp,
+//       otpExpires,
+//       authToken,
+//       authTokenExpires: otpExpires,
+//       isVerified: false,
+//     });
+//     await newUser.save();
+
+//     // In production: send OTP via SMS here
+//     console.log(`[Registration OTP for ${mobile}]: ${otp}`);
+
+//     return res.status(201).json({
+//       success: true,
+//       message: 'OTP sent to your mobile for registration verification',
+//       token: authToken,
+//     });
+//   } catch (error) {
+//     console.error('register error:', error);
+//     return res.status(500).json({ success: false, message: 'Internal server error' });
+//   }
+// };
+
+export const register = async (req, res) => {
+  try {
+    const { name, email, firebaseIdToken, mobile } = req.body;
+
+    if (!name || !email || !firebaseIdToken) {
+      return res.status(400).json({
+        success: false,
+        message: "name, email and firebaseIdToken are required",
+      });
+    }
+
+    const decodedToken = await verifyFirebaseIdToken(firebaseIdToken);
+
+    if (!decodedToken || !decodedToken.phone_number) {
+      return res.status(401).json({
+        success: false,
+        message: "Valid Firebase phone verification is required",
+      });
+    }
+
+    const firebaseUid = decodedToken.uid;
+    const verifiedPhone = decodedToken.phone_number;
+
+    // If the client sends a mobile number, ensure it matches the
+    // phone number verified by Firebase.
+    if (
+      mobile &&
+      !getPhoneVariants(verifiedPhone).includes(String(mobile).trim()) &&
+      !getPhoneVariants(mobile).includes(verifiedPhone)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Submitted mobile number does not match Firebase verification",
+      });
+    }
+
+    const existingUser = await findUserByPhone(verifiedPhone);
+
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        exists: true,
+        message: "Mobile number already registered. Please login.",
+      });
+    }
+
+    const linkedUser = await User.findOne({ firebaseUid });
+
+    if (linkedUser) {
+      return res.status(409).json({
+        success: false,
+        message: "This Firebase identity is already linked to an account",
+      });
+    }
+
+    const newUser = new User({
+      name: name.trim(),
+      email: email.trim(),
+      mobile: verifiedPhone,
+      firebaseUid,
+      role: "User",
+      isVerified: true,
+    });
+
+    await newUser.save();
+
+    return createAppJwtResponse(
+      res,
+      newUser,
+      "Registration successful. Welcome!"
+    );
+  } catch (error) {
+    // Handle a possible concurrent duplicate registration.
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "An account with these details already exists",
+      });
+    }
+
+    console.error("register error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+
 export const verifyRegisterOtp = async (req, res) => {
   try {
     const { mobile, token, otp } = req.body;
