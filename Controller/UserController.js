@@ -15,6 +15,7 @@ import StockHistory from '../Models/StockHistory.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import fs from 'fs';
+import generateToken  from '../config/jwtToken.js';
 import path from 'path';
 
 
@@ -25,10 +26,6 @@ const OTP_EXPIRY_MINUTES = 10;
 // Generate a random auth token
 const generateAuthToken = () => crypto.randomBytes(32).toString('hex');
 
-// Generate JWT
-const generateJWT = (userId, role) => {
-  return jwt.sign({ id: userId, role }, JWT_SECRET, { expiresIn: '7d' });
-};
 
 // Add these helper functions at the very top of your UserController.js file
 const normalizePath = (filePath) => filePath.replace(/\\/g, '/');
@@ -37,6 +34,83 @@ const normalizePath = (filePath) => filePath.replace(/\\/g, '/');
 const getImageUrl = (req, filePath) => {
   const normalized = normalizePath(filePath);
   return `${req.protocol}://${req.get('host')}/${normalized}`;
+};
+
+
+// ==================== AUTH HELPER FUNCTIONS ====================
+
+// Normalize a phone number into a set of comparable variants
+// (Firebase returns E.164 like "+911234567890"; your DB may store "1234567890")
+const getPhoneVariants = (phone) => {
+  if (!phone) return [];
+  const digits = String(phone).replace(/\D/g, ''); // strip non-digits
+  if (!digits) return [];
+
+  const variants = new Set();
+  variants.add(digits);                    // 911234567890
+  variants.add(`+${digits}`);              // +911234567890
+
+  // Last 10 digits (common for Indian mobile numbers)
+  if (digits.length > 10) {
+    variants.add(digits.slice(-10));       // 1234567890
+    variants.add(`+${digits.slice(-10)}`);
+  }
+
+  return Array.from(variants);
+};
+
+// Find a user by phone, trying all variants
+const findUserByPhone = async (phone) => {
+  const variants = getPhoneVariants(phone);
+  if (!variants.length) return null;
+  return User.findOne({ mobile: { $in: variants } });
+};
+
+// Alias used by loginRequest (your code calls `find(mobile)`)
+const find = findUserByPhone;
+
+// Verify a Firebase ID token server-side using firebase-admin.
+// Requires firebase-admin to be initialized (see note below).
+const verifyFirebaseIdToken = async (idToken) => {
+  // `firebaseAdmin` should be your initialized firebase-admin app.
+  // Example setup (in a separate file, e.g. utils/firebaseAdmin.js):
+  //   import admin from 'firebase-admin';
+  //   admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+  //   export default admin;
+  const { default: firebaseAdmin } = await import('../config/firebaseAdmin.js');
+  return firebaseAdmin.auth().verifyIdToken(idToken);
+};
+
+// Build a consistent app JWT response for a user
+const createAppJwtResponse = (res, user, message = 'Login successful') => {
+  const jwtToken = generateToken(user._id, user.role);
+
+  return res.status(200).json({
+    success: true,
+    message,
+    jwtToken,
+    user: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      mobile: user.mobile,
+      role: user.role,
+      profileImage: user.profileImage,
+    },
+  });
+};
+
+// Extract a YouTube video ID from various URL formats
+const extractYouTubeId = (url) => {
+  if (!url) return null;
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([A-Za-z0-9_-]{11})/,
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
 };
 
 
@@ -95,7 +169,7 @@ export const loginRequest = async (req, res) => {
       });
     }
 
-    const user = await findUserByPhone(mobile);
+    const user = await find(mobile);
 
     if (!user) {
       return res.status(404).json({
