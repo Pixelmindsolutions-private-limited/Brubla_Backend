@@ -157,6 +157,7 @@ export const createDesignerCatalogProduct = async (req, res) => {
     return res.status(400).json({ success: false, message: error.message });
   }
 };
+
 export const getAllDesignerCatalogProducts = async (req, res) => {
   try {
     const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
@@ -164,10 +165,27 @@ export const getAllDesignerCatalogProducts = async (req, res) => {
       100,
       Math.max(1, Number.parseInt(req.query.limit, 10) || 20),
     );
-    const query = req.user?.role === "admin" ? {} : { designerId: req.user.id };
+
+    // ---- Build the base query based on role ----
+    let query = {};
+
+    if (req.user?.role === "admin") {
+      query = {}; // admin: everything
+    } else if (req.user?.role === "designer") {
+      query = { designerId: req.user.id }; // designer: only their own
+    } else {
+      // user (or guest): public storefront
+      query = {
+        isActive: true,
+        approvalStatus: { $in: ["approved", "not_required"] },
+      };
+    }
+    // -------------------------------------------
+
     if (req.query.search)
       query.name = { $regex: req.query.search, $options: "i" };
     if (req.query.status) query.approvalStatus = req.query.status;
+
     const [products, total] = await Promise.all([
       DesignerProduct.find(query)
         .populate("categoryId", "name")
@@ -176,21 +194,21 @@ export const getAllDesignerCatalogProducts = async (req, res) => {
         .limit(limit),
       DesignerProduct.countDocuments(query),
     ]);
-    return res
-      .status(200)
-      .json({
-        success: true,
-        count: products.length,
-        total,
-        page,
-        pages: Math.ceil(total / limit),
-        products: products.map(serializeDesignerProduct),
-      });
+
+    return res.status(200).json({
+      success: true,
+      count: products.length,
+      total,
+      page,
+      pages: Math.ceil(total / limit),
+      products: products.map(serializeDesignerProduct),
+    });
   } catch (error) {
     console.error("getAllDesignerCatalogProducts error:", error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
 export const getDesignerCatalogProductById = async (req, res) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id))
@@ -282,14 +300,14 @@ export const getSpotlightProducts = async (req, res) => {
     const allSpotlight = await DesignerProduct.find({
       isspoligt: true,
     })
-      .select("name isspoligt isActive approvalStatus")
+      .select("name isspoligt isActive approvalStatus mainImages brand maxDiscount displayActualPrice displayPrice reviews wishlist")
       .lean();
 
     const activeSpotlight = await DesignerProduct.find({
       isspoligt: true,
       isActive: true,
     })
-      .select("name isspoligt isActive approvalStatus")
+      .select("name isspoligt isActive approvalStatus mainImages brand maxDiscount displayActualPrice displayPrice reviews")
       .lean();
 
     const products = await DesignerProduct.find({
@@ -311,7 +329,6 @@ export const getSpotlightProducts = async (req, res) => {
         spotlightProducts: allSpotlight,
       },
       count: products.length,
-      products,
     });
   } catch (error) {
     console.error("Get spotlight products error:", error);
