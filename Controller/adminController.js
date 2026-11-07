@@ -8555,18 +8555,49 @@ export const getProductStock = async (req, res) => {
 
 export const getProductStockHistory = async (req, res) => {
   try {
-    if (!mongoose.isValidObjectId(req.params.productId)) return res.status(400).json({ success: false, message: "Invalid productId" });
+    const { productId } = req.params;
+
+    if (!mongoose.isValidObjectId(productId)) {
+      return res.status(400).json({ success: false, message: 'Invalid productId' });
+    }
+
     const [history, product] = await Promise.all([
-      StockHistory.find({ productId: req.params.productId }).sort({ createdAt: -1 }).lean(),
-      Product.findById(req.params.productId).select("name variants.sku variants.color").lean(),
+      StockHistory.find({ productId })
+        .sort({ createdAt: -1 })
+        .lean(),
+      Product.findById(productId)
+        .select('name variants._id variants.sku variants.color')
+        .lean(),
     ]);
-    if (!product) return res.status(404).json({ success: false, message: "Product not found" });
+
+    if (!product) {
+      return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+
+    // Build a lookup keyed by variantId string for O(1) access
+    const variantMap = new Map(
+      (product.variants || []).map((v) => [String(v._id), v])
+    );
+
     const entries = history.map((entry) => {
-      const variant = product.variants?.find((item) => item._id.toString() === entry.variantId.toString());
-      return { ...entry, productName: product.name, sku: variant?.sku || "", color: variant?.color || "" };
+      const variantKey = entry.variantId ? String(entry.variantId) : null;
+      const variant = variantKey ? variantMap.get(variantKey) : undefined;
+
+      return {
+        ...entry,
+        productName: product.name,
+        sku: variant?.sku || '',
+        color: variant?.color || '',
+        // Optional: surface whether the variant was deleted / never existed
+        variantMissing: !!variantKey && !variant,
+      };
     });
+
     return res.json({ success: true, data: entries });
-  } catch (error) { return res.status(500).json({ success: false, message: error.message }); }
+  } catch (error) {
+    console.error('getProductStockHistory error:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 export const setProductStockThreshold = async (req, res) => {
