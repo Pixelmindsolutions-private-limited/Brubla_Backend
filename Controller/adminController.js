@@ -288,7 +288,15 @@ export const getUserById = async (req, res) => {
       })),
     );
 
-    return res.status(200).json({ success: true, user, orders });
+    const userObj = user.toObject();
+    if (userObj.profileImage) {
+      const normalizedPath = normalizePath(userObj.profileImage); // replaces \ with /
+      userObj.profileImage = `${req.protocol}://${req.get("host")}/${normalizedPath}`;
+    } else {
+      userObj.profileImage = null;
+    }
+
+    return res.status(200).json({ success: true, user: userObj, orders });
   } catch (error) {
     console.error("getUserById error:", error);
     return res

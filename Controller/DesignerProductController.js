@@ -219,7 +219,7 @@ export const getDesignerCatalogProductById = async (req, res) => {
       "categoryId",
       "name",
     );
-    if (!product || !canAccessProduct(product, req))
+    if (!product )
       return res
         .status(404)
         .json({ success: false, message: "Product not found" });

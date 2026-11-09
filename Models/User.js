@@ -230,7 +230,12 @@ const liveLocationSchema = new mongoose.Schema({
 
 // Cart Item Schema
 const cartItemSchema = new mongoose.Schema({
-  productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product', required: true },
+  productId: { type: mongoose.Schema.Types.ObjectId, required: true },
+  productType: {
+    type: String,
+    enum: ['Product', 'DesignerProduct'],
+    default: 'Product',
+  },
   variantId: { type: mongoose.Schema.Types.ObjectId, required: true },
   sizeId: { type: mongoose.Schema.Types.ObjectId, required: true },
   variant: {
@@ -288,10 +293,14 @@ const userSchema = new mongoose.Schema({
   addresses: [addressSchema],
   liveLocation: liveLocationSchema,
   
-  // Wishlist
   wishlist: [{
-    productId: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
-    addedAt: { type: Date, default: Date.now }
+    productId: { type: mongoose.Schema.Types.ObjectId, required: true },
+    productType: {
+      type: String,
+      enum: ['Product', 'DesignerProduct'],
+      default: 'Product',
+    },
+    addedAt: { type: Date, default: Date.now },
   }],
   
   // Cart

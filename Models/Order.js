@@ -47,9 +47,13 @@ const addressSchema = new mongoose.Schema({
 const orderItemSchema = new mongoose.Schema({
   productId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Product',
     required: true
   },
+  productType: {
+  type: String,
+  enum: ['Product', 'DesignerProduct'],
+  default: 'Product',
+},
   variantId: {
     type: mongoose.Schema.Types.ObjectId,
     required: true
